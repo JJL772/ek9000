@@ -47,12 +47,15 @@
 #define DELETE_CTOR(x)                                                                                                 \
 	x = delete /* Sucks! Mainly to prevent misuse of classes, if you need a deleted ctor for other reasons, just make  \
 				  it private. */
+#define EK9K_CPP11 1
 #else
 #define CONSTEXPR static const
 #define OVERRIDE
 #define FINAL
 #define MAYBE_UNUSED
 #define DELETE_CTOR(x)
+#define nullptr NULL
+#define EK9K_CPP03 1
 #endif
 
 #undef UNUSED
@@ -60,6 +63,8 @@
 
 // This comes from a windows header
 #undef CALLBACK
+#define STRUCT_REGISTER_SIZE(x) (sizeof(x) % 2 == 0 ? sizeof(x) / 2 : sizeof(x) / 2 + 1)
+#define BYTES_TO_REG_SIZE(x) ((x) % 2 == 0 ? (x) / 2 : (x) / 2 + 1)
 
 typedef struct {
 	const char* m_name;

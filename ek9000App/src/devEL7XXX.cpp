@@ -44,9 +44,6 @@ enum {
 	EL7047_START_TYPE_RELATIVE = 0x2
 };
 
-#define STRUCT_REGISTER_SIZE(x) (sizeof(x) % 2 == 0 ? sizeof(x) / 2 : sizeof(x) / 2 + 1)
-#define BYTES_TO_REG_SIZE(x) ((x) % 2 == 0 ? (x) / 2 : (x) / 2 + 1)
-
 #define MOTOR_TRACE() asynPrint(this->pasynUser_, ASYN_TRACE_FLOW, "(%s) %s:%u\n", __FILE__, __FUNCTION__, __LINE__)
 
 #define BREAK() /* asm("int3\n\t") */
@@ -113,7 +110,9 @@ NOTES:
 ========================================================
 */
 
-el70x7Axis::el70x7Axis(el70x7Controller* pC, int axisnum) : asynMotorAxis(pC, axisnum) {
+el70x7Axis::el70x7Axis(el70x7Controller* pC, int axisnum) :
+	asynMotorAxis(pC, axisnum)
+{
 	MOTOR_TRACE();
 	uint16_t spd;
 	uint16_t tmp;
@@ -126,11 +125,11 @@ el70x7Axis::el70x7Axis(el70x7Controller* pC, int axisnum) : asynMotorAxis(pC, ax
 	/* Grab initial values */
 	int status =
 		this->pcoupler->m_driver->doModbusIO(0, MODBUS_READ_HOLDING_REGISTERS, pcontroller->m_outputStart,
-											 (uint16_t*)&this->output, BYTES_TO_REG_SIZE(pcontroller->m_outputSize));
+											 (uint16_t*)m_pdo.out_pdo(), BYTES_TO_REG_SIZE(pcontroller->m_outputSize));
 	if (status)
 		goto error;
 	status = this->pcoupler->m_driver->doModbusIO(0, MODBUS_READ_HOLDING_REGISTERS, pcontroller->m_inputStart,
-												  (uint16_t*)&this->input, BYTES_TO_REG_SIZE(pcontroller->m_inputSize));
+												  (uint16_t*)m_pdo.in_pdo(), BYTES_TO_REG_SIZE(pcontroller->m_inputSize));
 	/* Read the configured speed */
 	spd = 0;
 	this->pcoupler->doCoEIO(0, pcontroller->m_terminalIndex, coe::EL704X_SPEED_RANGE_INDEX, 1, &spd,
@@ -143,8 +142,8 @@ el70x7Axis::el70x7Axis(el70x7Controller* pC, int axisnum) : asynMotorAxis(pC, ax
 
 	/* also set these to zero or else it will be full of junk values that'll get possibly written to the device if
 	 * there's an input error */
-	memset(&this->input, 0, sizeof(SPositionInterface_Input));
-	memset(&this->output, 0, sizeof(SPositionInterface_Output));
+	m_pdo.clear_in();
+	m_pdo.clear_out();
 
 	switch (spd) {
 		case 0:
@@ -170,27 +169,27 @@ el70x7Axis::el70x7Axis(el70x7Controller* pC, int axisnum) : asynMotorAxis(pC, ax
 			break;
 	}
 
-	this->output.stm_enable = 1; /* Enable the motor */
+	m_pdo.set_stm_enable(true); /* Enable the motor */
 
 	/* Default of absolute start type */
-	this->output.pos_start_type = 0x1;
+	m_pdo.set_pos_start_type(EL7047_START_TYPE_ABSOLUTE);
 
 	/* For acceleration, decel and velocity we want to grab the initial values from the CoE parameters */
 	tmp = 0;
 	/* Read default min velocity */
 	this->pcoupler->doCoEIO(0, pcontroller->m_terminalIndex, coe::EL704X_VELOCITY_MIN_INDEX, 1, &tmp,
 							coe::EL704X_VELOCITY_MIN_SUBINDEX);
-	this->output.pos_velocity = tmp;
+	m_pdo.set_pos_velocity(tmp);
 
 	/* Read default acceleration in the positive direction */
 	this->pcoupler->doCoEIO(0, pcontroller->m_terminalIndex, coe::EL704X_ACCELERATION_POS_INDEX, 1, &tmp,
 							coe::EL704X_ACCELERATION_POS_SUBINDEX);
-	this->output.pos_accel = tmp;
+	m_pdo.set_pos_accel(tmp);
 
 	/* Read default deceleration in the positive direction */
 	this->pcoupler->doCoEIO(0, pcontroller->m_terminalIndex, coe::EL704X_DECELERATION_POS_INDEX, 1, &tmp,
 							coe::EL704X_DECELERATION_POS_SUBINDEX);
-	this->output.pos_decel = tmp;
+	m_pdo.set_pos_decel(tmp);
 
 	this->UpdatePDO();
 	this->unlock();
@@ -211,8 +210,8 @@ void el70x7Axis::unlock() {
 }
 
 void el70x7Axis::ResetIfRequired() {
-	if (this->input.stm_err)
-		this->output.stm_reset = 1;
+	if (m_pdo.stm_err())
+		m_pdo.set_stm_reset(true);
 }
 
 asynStatus el70x7Axis::setMotorParameters(uint16_t min_start_vel, uint16_t max_coil_current,
@@ -274,22 +273,22 @@ asynStatus el70x7Axis::move(double pos, int rel, double min_vel, double max_vel,
 	MOTOR_TRACE();
 	this->ResetIfRequired();
 
-	SPositionInterface_Output prev = output;
+	el70xxSavedPdo prevOut = m_pdo.save_output_pdo();
 
 	/* Set the params */
 	asynPrint(this->pasynUser_, ASYN_TRACE_FLOW, "Max vel: %f\n", max_vel);
 	asynPrint(this->pasynUser_, ASYN_TRACE_FLOW, "Min vel: %f\n", min_vel);
 
 	/* Update the velocity params */
-	this->output.pos_accel = (uint32_t)round(accel);
-	this->output.pos_decel = (uint32_t)round(accel);
-	this->output.pos_velocity = min_vel + (max_vel - min_vel) / 2.0f;
-	this->output.pos_tgt_pos = pos;
+	m_pdo.set_pos_accel((uint32_t)round(accel));
+	m_pdo.set_pos_decel((uint32_t)round(accel));
+	m_pdo.set_pos_velocity(min_vel + (max_vel - min_vel) / 2.0f);
+	m_pdo.set_pos_tgt_pos(pos);
 	if (rel)
-		this->output.pos_start_type = EL7047_START_TYPE_RELATIVE; /* 0x2 means relative pos */
+		m_pdo.set_pos_start_type(EL7047_START_TYPE_RELATIVE);
 	else
-		this->output.pos_start_type = EL7047_START_TYPE_ABSOLUTE; /* 0x1 means absolute pos */
-	output.pos_emergency_stp = 0;
+		m_pdo.set_pos_start_type(EL7047_START_TYPE_ABSOLUTE);
+	m_pdo.set_pos_emergency_stop(false);
 
 	/* Execute move */
 	int stat = Execute();
@@ -299,7 +298,7 @@ asynStatus el70x7Axis::move(double pos, int rel, double min_vel, double max_vel,
 	return asynSuccess;
 error:
 	asynPrint(this->pasynUser_, ASYN_TRACE_ERROR, "%s:%u Unable to perform move.\n", __FUNCTION__, __LINE__);
-	output = prev; /* Restore previous output state on motor error */
+	m_pdo.restore_pdo(prevOut); /* Restore previous output state on motor error */
 	this->unlock();
 	return asynError;
 }
@@ -315,11 +314,11 @@ asynStatus el70x7Axis::moveVelocity(double min_vel, double max_vel, double accel
 	MOTOR_TRACE();
 	this->ResetIfRequired();
 
-	SPositionInterface_Output prev = output;
+	el70xxSavedPdo prevOut = m_pdo.save_output_pdo();
 
 	/* Update relevant parameters */
-	this->output.pos_accel = (uint32_t)round(accel);
-	this->output.pos_velocity = min_vel + (max_vel - min_vel) / 2.0;
+	m_pdo.set_pos_accel((uint32_t)round(accel));
+	m_pdo.set_pos_velocity(min_vel + (max_vel - min_vel) / 2.0);
 
 	int stat = this->Execute();
 	if (stat)
@@ -330,7 +329,7 @@ asynStatus el70x7Axis::moveVelocity(double min_vel, double max_vel, double accel
 	return asynSuccess;
 error:
 	asynPrint(this->pasynUser_, ASYN_TRACE_ERROR, "%s:%u Unable to set move velocity.\n", __FUNCTION__, __LINE__);
-	output = prev; /* Restore the pre-call output state on propagation failure */
+	m_pdo.restore_pdo(prevOut); /* Restore the pre-call output state on propagation failure */
 	this->unlock();
 	return asynError;
 }
@@ -347,13 +346,13 @@ asynStatus el70x7Axis::home(double min_vel, double max_vel, double accel, int fo
 	MOTOR_TRACE();
 	this->ResetIfRequired();
 	asynPrint(this->pasynUser_, ASYN_TRACE_FLOW, "Motor home\n");
-	this->output.pos_accel = (uint32_t)round(accel);
-	this->output.pos_velocity = (uint32_t)round(max_vel);
+	m_pdo.set_pos_accel((uint32_t)round(accel));
+	m_pdo.set_pos_velocity((uint32_t)round(max_vel));
 
 	/* Home is just going to be 0 for now */
-	output.pos_tgt_pos = 0;
-	output.pos_emergency_stp = 0;
-	output.pos_start_type = EL7047_START_TYPE_ABSOLUTE;
+	m_pdo.set_pos_tgt_pos(0);
+	m_pdo.set_pos_emergency_stop(false);
+	m_pdo.set_pos_start_type(EL7047_START_TYPE_ABSOLUTE);
 	int stat = Execute();
 	if (stat)
 		goto error;
@@ -371,8 +370,8 @@ asynStatus el70x7Axis::stop(double accel) {
 	this->ResetIfRequired();
 
 	/* Update the deceleration field */
-	this->output.pos_decel = (uint32_t)round(accel);
-	output.pos_execute = 0;
+	m_pdo.set_pos_decel((uint32_t)round(accel));
+	m_pdo.set_pos_execute(false);
 
 	int stat = this->UpdatePDO();
 	if (stat)
@@ -416,29 +415,30 @@ asynStatus el70x7Axis::poll(bool* moving) {
 		goto error;
 
 	/* encoderposition is double */
-	this->setDoubleParam(pC_->motorEncoderPosition_, (double)input.cntr_val);
-	this->setIntegerParam(pC_->motorStatusDone_, input.pos_in_tgt);
-	this->setIntegerParam(pC_->motorStatusDirection_, input.stm_mov_pos);
-	this->setIntegerParam(pC_->motorStatusSlip_, input.stm_stall);
-	this->setIntegerParam(pC_->motorStatusProblem_, input.stm_err);
+	this->setDoubleParam(pC_->motorEncoderPosition_, (double)m_pdo.cntr_val());
+	this->setIntegerParam(pC_->motorStatusDone_, m_pdo.pos_in_tgt());
+	this->setIntegerParam(pC_->motorStatusDirection_, m_pdo.stm_move_pos());
+	this->setIntegerParam(pC_->motorStatusSlip_, m_pdo.stm_stall());
+	this->setIntegerParam(pC_->motorStatusProblem_, m_pdo.stm_err());
 
 	/* Check for counter overflow or underflow */
-	if (input.cntr_overflow || input.cntr_underflow)
+	if (m_pdo.cntr_overflow() || m_pdo.cntr_underflow())
 		asynPrint(this->pasynUser_, ASYN_TRACE_WARNING, "%s: Stepper motor counter overflow/underflow detected.\n",
 				  __FUNCTION__);
 	/* Checo for other error condition */
-	if (input.stm_err || input.pos_err || input.sync_err || input.stm_sync_err)
+	if (m_pdo.stm_err() || m_pdo.pos_err() || m_pdo.sync_err() || m_pdo.stm_sync_err())
 		asynPrint(this->pasynUser_, ASYN_TRACE_WARNING, "%s: Stepper motor error detected.\n", __FUNCTION__);
-	if (input.stm_warn || input.stm_warn)
+	if (m_pdo.stm_warn())
 		asynPrint(this->pasynUser_, ASYN_TRACE_WARNING, "%s: Stepper motor warning.\n", __FUNCTION__);
-	*moving = input.pos_busy != 0;
+	if (moving)
+		*moving = m_pdo.pos_busy() != 0;
 	this->unlock();
 	return asynSuccess;
 error:
 	asynPrint(this->pasynUser_, ASYN_TRACE_ERROR, "%s:%u Unable to poll device.\n", __FUNCTION__, __LINE__);
 	/* When we reconnect we want to stop the moder ASAP */
-	output.pos_emergency_stp = 1;
-	output.pos_execute = 0;
+	m_pdo.set_pos_emergency_stop(true);
+	m_pdo.set_pos_execute(false);
 	this->unlock();
 	return asynError;
 }
@@ -456,11 +456,11 @@ asynStatus el70x7Axis::setPosition(double pos) {
 	asynPrint(this->pasynUser_, ASYN_TRACE_FLOW, "%s:%u el70x7Axis::setPosition val=%f\n", __FUNCTION__, __LINE__, pos);
 
 	/* Save previous output state */
-	SPositionInterface_Output prev = output;
+	el70xxSavedPdo prevOut = m_pdo.save_output_pdo();
 
-	output.pos_tgt_pos = (uint32_t)round(pos);
-	output.pos_start_type = EL7047_START_TYPE_ABSOLUTE;
-	output.pos_decel = output.pos_accel;
+	m_pdo.set_pos_tgt_pos((uint32_t)round(pos));
+	m_pdo.set_pos_start_type(EL7047_START_TYPE_ABSOLUTE);
+	m_pdo.set_pos_decel(m_pdo.pos_accel());
 	int stat = this->UpdatePDO();
 	if (stat)
 		goto error;
@@ -470,7 +470,7 @@ asynStatus el70x7Axis::setPosition(double pos) {
 error:
 	asynPrint(this->pasynUser_, ASYN_TRACE_ERROR, "%s:%u Error while setting tgt pos.\n", __FUNCTION__, __LINE__);
 	/* Restore previous if setPos failed */
-	output = prev;
+	m_pdo.restore_pdo(prevOut);
 	this->unlock();
 	return asynError;
 }
@@ -479,8 +479,8 @@ asynStatus el70x7Axis::setEncoderPosition(double pos) {
 	this->lock();
 	MOTOR_TRACE();
 
-	output.enc_set_counter_val = (uint32_t)round(pos);
-	output.enc_set_counter = 1;
+	m_pdo.set_enc_set_counter_val((uint32_t)round(pos));
+	m_pdo.set_enc_set_counter(true);
 	int stat = UpdatePDO();
 	if (stat)
 		goto error;
@@ -502,18 +502,20 @@ asynStatus el70x7Axis::setClosedLoop(bool closed) {
 asynStatus el70x7Axis::UpdatePDO(bool locked) {
 	UNUSED(locked);
 	const char* pStep = "UPDATE_PDO";
-	SPositionInterface_Input old_input = this->input;
+
+	el70xxSavedPdo prevInput = m_pdo.save_input_pdo();
+
 	/* Update input pdos */
 	asynPrint(this->pasynUser_, ASYN_TRACE_FLOW, "%s:%u Step: %s\n", __FUNCTION__, __LINE__, pStep);
 	int stat = pcoupler->m_driver->doModbusIO(0, MODBUS_READ_INPUT_REGISTERS, pcontroller->m_inputStart,
-											  (uint16_t*)&this->input, STRUCT_REGISTER_SIZE(SPositionInterface_Input));
+											  (uint16_t*)m_pdo.in_pdo(), STRUCT_REGISTER_SIZE(m_pdo.in_size()));
 	if (stat)
 		goto error;
 	pStep = "PROPAGATE_PDO";
 	asynPrint(this->pasynUser_, ASYN_TRACE_FLOW, "%s:%u Step: %s\n", __FUNCTION__, __LINE__, pStep);
 	/* Propagate changes from our internal pdo */
 	stat = pcoupler->m_driver->doModbusIO(0, MODBUS_WRITE_MULTIPLE_REGISTERS, pcontroller->m_outputStart,
-										  (uint16_t*)&this->output, STRUCT_REGISTER_SIZE(SPositionInterface_Output));
+										  (uint16_t*)m_pdo.out_pdo(), STRUCT_REGISTER_SIZE(m_pdo.out_size()));
 	if (stat)
 		goto error;
 	return asynSuccess;
@@ -524,7 +526,7 @@ error:
 			  __FUNCTION__, __LINE__, stat, pStep, pcontroller->m_inputStart, pcontroller->m_inputSize / 2,
 			  pcontroller->m_outputStart, pcontroller->m_outputSize / 2);
 	/* Reset to previous on error */
-	this->input = old_input;
+	m_pdo.restore_pdo(prevInput);
 	// this->output = old_output;
 	return asynError;
 }
@@ -533,8 +535,8 @@ error:
 Clears the execute bit and returns after a short sleep
 */
 void el70x7Axis::ResetExec() {
-	this->output.pos_execute = 0;
-	this->UpdatePDO();
+	m_pdo.set_pos_execute(false);
+	UpdatePDO();
 	epicsThreadSleep(0.05); /* 500 uS sleep */
 }
 
@@ -546,8 +548,8 @@ asynStatus el70x7Axis::Execute(bool locked) {
 
 	MOTOR_TRACE();
 	this->ResetExec();
-	this->output.pos_execute = 1;
-	this->output.pos_emergency_stp = 0;
+	m_pdo.set_pos_execute(true);
+	m_pdo.set_pos_emergency_stop(false);
 	int stat = this->UpdatePDO();
 	if (stat)
 		goto error;
@@ -739,10 +741,10 @@ void el70x7ResetMotor(const iocshArgBuf* args) {
 		if (strcmp(x->portName, port) == 0) {
 			/* For this, we need to toggle the reset bit in case it's already been reset once */
 			el70x7Axis* axis = x->getAxis(0);
-			axis->output.pos_execute = 0;
-			axis->output.stm_reset = 0;
+			axis->m_pdo.set_pos_execute(false);
+			axis->m_pdo.set_stm_reset(false);
 			axis->UpdatePDO();
-			axis->output.stm_reset = 1;
+			axis->m_pdo.set_stm_reset(true);
 			axis->UpdatePDO();
 		}
 	}

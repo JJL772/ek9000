@@ -167,7 +167,6 @@ def write_supported_terminals(terms: dict) -> None:
             fp.write(f'* {t["name"]}\n')
         fp.write('\n\n')
 
-
 class Terminal():
     def __init__(self, record: str, num: int, dtyp: str, typ: str, terminal_class: str, spec: SpecType|None = None):
         self.vals = dict()
