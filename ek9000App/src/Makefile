@@ -48,6 +48,7 @@ ifeq ($(ENABLE_MOTOR_SUPPORT),1)
 ek9000Support_SRCS += devEL7XXX.cpp
 ek9000Support_LIBS += motor
 USR_CXXFLAGS += -DEK9000_MOTOR_SUPPORT=1
+DBD += devEL7XXX.dbd
 endif
 
 include $(TOP)/configure/RULES
