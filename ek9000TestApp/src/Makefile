@@ -24,6 +24,11 @@ ek9000Test_DBD += asyn.dbd
 ek9000Test_DBD += modbusSupport.dbd
 ek9000Test_DBD += drvAsynIPPort.dbd
 
+ifeq ($(ENABLE_MOTOR_SUPPORT),1)
+ek9000Test_DBD += devEL7XXX.dbd
+ek9000Test_LIBS += motor
+endif
+
 # Include dbd files from all support applications:
 
 # Add all the support libraries needed by this IOC
