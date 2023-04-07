@@ -138,7 +138,7 @@ public:
 	int m_terminalIndex;
 	/* the device */
 	devEK9000* m_device;
-	/* Terminal id, aka the 1124 in EL1124 */
+	/* Terminal id, i.e. the 1124 in EL1124 */
 	int m_terminalId;
 	/* Size of inputs */
 	int m_inputSize;
@@ -315,6 +315,13 @@ public:
 	asynUser* GetAsynUser() {
 		return pasynUserSelf;
 	}
+
+	/** Enable/disable tracing */
+	void SetTrace(const char* logfile, bool enable);
+	void trace(const char* fmt, ...) PRINTF_ATTR(2,3);
+
+private:
+	FILE* m_traceFile;
 
 public:
 	/* Statics! */

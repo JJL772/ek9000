@@ -7,21 +7,13 @@
  * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  */
-//======================================================//
-// Name: devEL7XXX.cpp
-// Purpose: Device support for EL7xxx modules (motor control)
-//          requires the motor record module for epics
-// Authors: Jeremy L.
-// Date Created: July 17, 2019
-//======================================================//
-/* EPICS includes */
 #include <epicsExport.h>
 #include <iocsh.h>
 #include <callback.h>
 #include <drvModbusAsyn.h>
 #include <asynPortDriver.h>
 
-/* Motor record */
+/* From motor record */
 #include <asynMotorAxis.h>
 #include <asynMotorController.h>
 
@@ -68,7 +60,7 @@ el70x7Controller::el70x7Controller(devEK9000* dev, devEK9000Terminal* controller
 	pcontroller = controller;
 	this->paxis = (el70x7Axis**)calloc(sizeof(el70x7Axis*), numAxis);
 	for (int i = 0; i < numAxis; i++)
-		this->paxis[i] = new el70x7Axis(this, i);
+		this->paxis[i] = new el70x7Axis(controller->m_terminalId, this, i);
 	startPoller(0.25, 0.25, 0);
 	if (!dev->VerifyConnection())
 		asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "Unable to connect to device.\n");
@@ -110,8 +102,9 @@ NOTES:
 ========================================================
 */
 
-el70x7Axis::el70x7Axis(el70x7Controller* pC, int axisnum) :
-	asynMotorAxis(pC, axisnum)
+el70x7Axis::el70x7Axis(int type, el70x7Controller* pC, int axisnum) :
+	asynMotorAxis(pC, axisnum),
+	m_pdo(type)
 {
 	MOTOR_TRACE();
 	uint16_t spd;
@@ -750,7 +743,7 @@ void el70x7ResetMotor(const iocshArgBuf* args) {
 	}
 }
 
-void el7047_Register() {
+void el7047_register() {
 	/* el7047Configure */
 	{
 		static const iocshArg arg1 = {"EK9000 Name", iocshArgString};
@@ -794,5 +787,5 @@ void el7047_Register() {
 
 extern "C"
 {
-	epicsExportRegistrar(el7047_Register);
+	epicsExportRegistrar(el7047_register);
 }

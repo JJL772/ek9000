@@ -9,6 +9,8 @@
  * contained in the LICENSE.txt file.
  */
 
+#pragma once
+
 #include <stdint.h>
 
 /* For Positioning interface compact */

@@ -1,1 +1,3 @@
+include "motorRecord.dbd"
+
 registrar(el7047_register)

@@ -241,10 +241,14 @@ int devEK9000Terminal::doEK9000IO(int type, int startaddr, uint16_t* buf, int le
 	if (!this->m_device) {
 		return EK_EBADTERM;
 	}
-	int status = this->m_device->doModbusIO(0, type, startaddr, buf, len);
+	m_device->trace("%s doModbusIO type=%d, addr=%d, len=%d, buf=%p: ",
+		util::fmttime().c_str(), type, startaddr, (int)len, buf);
+	int status = m_device->doModbusIO(0, type, startaddr, buf, len);
 	if (status) {
+		m_device->trace("failed code=%d\n", status);
 		return (status + 0x100);
 	}
+	m_device->trace("\n");
 	return EK_EOK;
 }
 
@@ -304,6 +308,7 @@ devEK9000::devEK9000(const char* portName, const char* octetPortName, int termCo
 	this->m_Mutex = epicsMutexCreate();
 	m_analog_status = EK_EERR + 0x100; /* No data yet!! */
 	m_digital_status = EK_EERR + 0x100;
+	m_traceFile = NULL;
 }
 
 devEK9000::~devEK9000() {
@@ -498,6 +503,11 @@ int devEK9000::CoEVerifyConnection(uint16_t termid) {
 /* LENGTH IS IN REGISTERS */
 int devEK9000::doCoEIO(int rw, uint16_t term, uint16_t index, uint16_t len, uint16_t* data, uint16_t subindex,
 					   uint16_t reallen) {
+	trace(
+		"doCoEIO: %s terminal=%d, index=%d, length=%d, subindex=%d, datalen=%d\n",
+		rw ? "write" : "read", (int)term, (int)index, (int)len, (int)subindex, (int)reallen
+	);
+
 	/* write */
 	if (rw) {
 		uint16_t tmp_data[512] = {
@@ -558,22 +568,32 @@ int devEK9000::doCoEIO(int rw, uint16_t term, uint16_t index, uint16_t len, uint
 
 int devEK9000::doEK9000IO(int rw, uint16_t addr, uint16_t len, uint16_t* data) {
 	int status = 0;
+	trace(
+		"%s doEK9000IO: %s addr=%d, len=%d, data=%p: ",
+		util::fmttime().c_str(),
+		rw ? "write" : "read", (int)addr, (int)len, data
+	);
 	/* write */
 	if (rw) {
 		status = this->doModbusIO(0, MODBUS_WRITE_MULTIPLE_REGISTERS, addr, data, len);
 		if (status) {
+			trace("failed code=%d\n", status);
 			return status + 0x100;
 		}
+		trace("\n");
 		return EK_EOK;
 	}
 	/* read */
 	else {
 		status = this->doModbusIO(0, MODBUS_READ_HOLDING_REGISTERS, addr, data, len);
 		if (status) {
+			trace("failed code=%d\n", status);
 			return status + 0x100;
 		}
+		trace("\n");
 		return EK_EOK;
 	}
+	trace("bad param\n");
 	return EK_EBADPARAM;
 }
 
@@ -814,6 +834,33 @@ const char* devEK9000::ErrorToString(int i) {
 	}
 }
 
+
+void devEK9000::SetTrace(const char* logfile, bool enable)
+{
+	if (!enable) {
+		if (m_traceFile)
+			fclose(m_traceFile);
+		return;
+	}
+
+	m_traceFile = fopen(logfile, "w+");
+	if (!m_traceFile)
+		return;
+
+	fprintf(m_traceFile, "------ Trace begin at %s ------\n", util::fmttime().c_str());
+}
+
+void devEK9000::trace(const char* fmt, ...) {
+	if (!m_traceFile)
+		return;
+
+	va_list va;
+	va_start(va, fmt);
+	vfprintf(m_traceFile, fmt, va);
+	va_end(va);
+	fflush(m_traceFile);
+}
+
 //==========================================================//
 // IOCsh functions here
 //==========================================================//
@@ -1030,6 +1077,25 @@ void ek9000SetPollTime(const iocshArgBuf* args) {
 	devEK9000::pollDelay = time;
 }
 
+void ek9000Trace(const iocshArgBuf* args) {
+	const char* ek9k = args[0].sval;
+	const char* file = args[1].sval;
+	int enable = args[2].ival;
+
+	if (!ek9k)
+		return;
+	if (!file)
+		return;
+
+	devEK9000* dev = devEK9000::FindDevice(ek9k);
+	if (!dev)
+		return;
+	dev->SetTrace(file, enable);
+}
+
+void ek9kDumpMappings(const iocshArgBuf* args) {
+}
+
 int ek9000RegisterFunctions() {
 
 	/* ek9000SetWatchdogTime(ek9k, time[int]) */
@@ -1127,6 +1193,18 @@ int ek9000RegisterFunctions() {
 		static iocshFuncDef func2 = {"ek9kList", 0, NULL, NULL};
 		iocshRegister(&func, ek9000List);
 		iocshRegister(&func2, ek9000List);
+	}
+
+	/* ek9000Trace */
+	{
+		static const iocshArg arg1 = {"Ek9k name", iocshArgString};
+		static const iocshArg arg2 = {"file", iocshArgString};
+		static const iocshArg arg3 = {"enable", iocshArgInt};
+		static const iocshArg* const args[] = {&arg1, &arg2};
+		static const iocshFuncDef func1 = {"ek9kTrace", 2, args, "ek9kTrace NAME FILE"};
+		static const iocshFuncDef func2 = {"ek9000Trace", 2, args, "ek9kTrace NAME FILE"};
+		iocshRegister(&func1, ek9000Trace);
+		iocshRegister(&func2, ek9000Trace);
 	}
 
 	return 0;

@@ -55,7 +55,7 @@
 #define MAYBE_UNUSED
 #define DELETE_CTOR(x)
 #define nullptr NULL
-#define EK9K_CPP03 1
+#define EK9K_CXX03 1
 #endif
 
 #undef UNUSED
@@ -65,6 +65,12 @@
 #undef CALLBACK
 #define STRUCT_REGISTER_SIZE(x) (sizeof(x) % 2 == 0 ? sizeof(x) / 2 : sizeof(x) / 2 + 1)
 #define BYTES_TO_REG_SIZE(x) ((x) % 2 == 0 ? (x) / 2 : (x) / 2 + 1)
+
+#undef printf
+#undef PRINTF_ATTR
+#ifdef __GNUC__
+#define PRINTF_ATTR(x,y) __attribute__ ((format (printf, x, y)))
+#endif
 
 typedef struct {
 	const char* m_name;
@@ -205,6 +211,14 @@ concept RECORD_TYPE = detail::BASE_RECORD<T> &&(detail::INPUT_RECORD<T> || detai
 
 inline bool DpvtValid(TerminalDpvt_t* dpvt) {
 	return dpvt && dpvt->pdrv;
+}
+
+inline std::string fmttime() {
+	char buf[127];
+	epicsTimeStamp stmp;
+	epicsTimeGetCurrent(&stmp);
+	epicsTimeToStrftime(buf, sizeof(buf), "%Y/%m/%d %H:%M:%S.%03f ", &stmp);
+	return buf;
 }
 
 /**
