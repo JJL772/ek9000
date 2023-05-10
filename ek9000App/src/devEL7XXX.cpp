@@ -28,7 +28,6 @@
 #include "devEL7XXX.h"
 #include "errlog.h"
 #include "ekDiag.h"
-#include "ekLocal.h"
 #include "ekUtil.h"
 
 enum {
@@ -77,7 +76,7 @@ el70x7Axis* el70x7Controller::getAxis(asynUser* usr) {
 void el70x7Controller::report(FILE* fd, int lvl) {
 	if (lvl) {
 		fprintf(fd, "el70x7Controller slave=%u\n", this->pcontroller->m_terminalIndex);
-		fprintf(fd, "\tek9000_name=%s\n", pcoupler->m_name);
+		fprintf(fd, "\tek9000_name=%s\n", pcoupler->m_name.data());
 		fprintf(fd, "\tterminalno=%u\n", pcontroller->m_terminalIndex);
 		fprintf(fd, "\tport=%s\n", this->portName);
 		fprintf(fd, "\tnumaxes=%u\n", this->numAxes_);
@@ -331,7 +330,7 @@ error:
 Move the motor to it's home position
 */
 asynStatus el70x7Axis::home(double min_vel, double max_vel, double accel, int forwards) {
-	// !!! FIXME
+	// FIXME: we are not taking min vel or forwards into account
 	UNUSED(min_vel);
 	UNUSED(forwards);
 
@@ -569,6 +568,7 @@ void el7047_Configure(const iocshArgBuf* args) {
 	const char* port = args[1].sval;
 	const char* rec = args[2].sval;
 	int slaveid = args[3].ival;
+	const char* type = args[4].sval;
 	if (!ek9k) {
 		epicsPrintf("Please provide an ek9000 name.\n");
 		return;
@@ -577,16 +577,44 @@ void el7047_Configure(const iocshArgBuf* args) {
 		epicsPrintf("Please provide a port name.\n");
 		return;
 	}
+	if (!type) {
+		epicsPrintf("Please provide a terminal type code (e.g. EL7047)");
+		return;
+	}
+
+	int termType = -1;
+	if (!epicsStrCaseCmp("EL7047", type) || !epicsStrCaseCmp("7047", type))
+		termType = 7047;
+	else if (!epicsStrCaseCmp("EL7041", type) || !epicsStrCaseCmp("7041", type))
+		termType = 7041;
+
+	if (termType <= 0) {
+		epicsPrintf("Invalid terminal type '%s'!\n", type);
+		return;
+	}
+
 	devEK9000* dev = devEK9000::FindDevice(ek9k);
 
 	if (!dev) {
 		epicsPrintf("Device not found.\n");
 		return;
 	}
+	
+	const STerminalInfoConst_t* info = NULL;
+	switch(termType) {
+	case 7047:
+		info = &EL7047_Info; break;
+	case 7041:
+		info = &EL7041_Info; break;
+	default:
+		epicsPrintf("Invalid terminal type '%s'!\n", type);
+		break;
+	}
+	
 	devEK9000Terminal* term = &dev->m_terms[slaveid - 1];
-	dev->AddTerminal(rec, 7047, slaveid);
-	term->m_inputSize = 14;
-	term->m_outputSize = 14;
+	dev->AddTerminal(rec, termType, slaveid);
+	term->m_inputSize = info->m_nInputSize;
+	term->m_outputSize = info->m_nOutputSize;
 	el70x7Controller* pctl = new el70x7Controller(dev, term, port, 1);
 	epicsPrintf("Created motor port %s\n", port);
 	controllers.push_back(pctl);
@@ -608,7 +636,7 @@ void el7047_Stat(const iocshArgBuf* args) {
 			el70x7Axis* axis = (*x)->getAxis(i);
 			if (!axis)
 				break;
-			epicsPrintf("%s\n", (*x)->pcontroller->m_recordName);
+			epicsPrintf("%s\n", (*x)->pcontroller->m_recordName.data());
 			epicsPrintf("\tSpeed [steps/s]:      %u\n", axis->speed);
 			epicsPrintf("\tEncoder pos:          %u\n", axis->enc_pos);
 		}
@@ -750,9 +778,10 @@ void el7047_register() {
 		static const iocshArg arg2 = {"Port Name", iocshArgString};
 		static const iocshArg arg3 = {"Record", iocshArgString};
 		static const iocshArg arg4 = {"Terminal position", iocshArgInt};
-		static const iocshArg* const args[] = {&arg1, &arg2, &arg3, &arg4};
-		static const iocshFuncDef func = {"el70x7Configure", 4, args,
-										  "el70x7Configure ek9k_name port_name record_name term_number"};
+		static const iocshArg arg5 = {"Terminal type", iocshArgString};
+		static const iocshArg* const args[] = {&arg1, &arg2, &arg3, &arg4, &arg5};
+		static const iocshFuncDef func = {"el70x7Configure", 5, args,
+										  "el70x7Configure ek9k_name port_name record_name term_number terminal_type"};
 		iocshRegister(&func, el7047_Configure);
 	}
 	/* el70x7Stat */

@@ -7,6 +7,8 @@
 #include <dbScan.h>
 #include <alarm.h>
 #include <recGbl.h>
+#include <epicsAssert.h>
+#include <epicsStdlib.h>
 
 #include <longinRecord.h>
 
@@ -220,6 +222,7 @@ extern "C"
 }
 
 #pragma pack(1)
+// Standard PDO layout (compact uses 32-bit value for position)
 struct EL5042InputPDO_t {
 	uint8_t warning : 1;
 	uint8_t error : 1;
@@ -229,7 +232,7 @@ struct EL5042InputPDO_t {
 	uint8_t diag : 1;
 	uint8_t txpdo_state : 1;
 	uint8_t input_cycle_counter : 2;
-	uint32_t position;
+	uint64_t position;
 };
 #pragma pack()
 

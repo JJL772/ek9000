@@ -26,6 +26,7 @@ ek9000Test_DBD += drvAsynIPPort.dbd
 
 ifeq ($(ENABLE_MOTOR_SUPPORT),1)
 ek9000Test_DBD += devEL7XXX.dbd
+ek9000Test_DBD += motorSupport.dbd
 ek9000Test_LIBS += motor
 endif
 

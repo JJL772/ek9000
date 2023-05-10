@@ -990,8 +990,8 @@ void ek9000Stat(const iocshArgBuf* args) {
 		epicsPrintf("\tStatus: NOT CONNECTED\n");
 	epicsPrintf("\tIP: %s\n", dev->m_ip.data());
 	epicsPrintf("\tAsyn Port Name: %s\n", dev->m_portName.data());
-	epicsPrintf("\tAO size: %u [bytes]\n", ao);
-	epicsPrintf("\tAI size: %u [bytes]\n", ai);
+	epicsPrintf("\tAO size: %u bytes, %u registers\n", ao, ao/2);
+	epicsPrintf("\tAI size: %u bytes, %u registers\n", ai, ai/2);
 	epicsPrintf("\tBI size: %u [bits]\n", bi);
 	epicsPrintf("\tBO size: %u [bits]\n", bo);
 	epicsPrintf("\tTCP connections: %u\n", tcp);
@@ -1091,9 +1091,6 @@ void ek9000Trace(const iocshArgBuf* args) {
 	if (!dev)
 		return;
 	dev->SetTrace(file, enable);
-}
-
-void ek9kDumpMappings(const iocshArgBuf* args) {
 }
 
 int ek9000RegisterFunctions() {

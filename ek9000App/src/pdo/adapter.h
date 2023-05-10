@@ -21,6 +21,8 @@
 #include "pdo/pdo_el7041.h"
 #include "pdo/pdo_el7047.h"
 
+#include "ekUtil.h"
+
 // NOTE: When adding a new term type, you will need to modify the fun branches in el70xxPdoAdapter
 enum MotorTerminalType {
 	MT_EL7041,
@@ -94,21 +96,21 @@ public:
 	// PDO pointer accessors
 
 	inline void* in_pdo() {
-		return m_type == MT_EL7047 ? (void*)&in.el7047 : (void*)&in.el7041;
+		return (m_type == MT_EL7047) ? (void*)&in.el7047 : (void*)&in.el7041;
 	}
 	
 	inline void* out_pdo() {
-		return m_type == MT_EL7047 ? (void*)&out.el7047 : (void*)&out.el7041;
+		return (m_type == MT_EL7047) ? (void*)&out.el7047 : (void*)&out.el7041;
 	}
 
 	// PDO size accessors
 
 	inline size_t in_size() const {
-		return m_type == MT_EL7047 ? sizeof(in.el7047) : sizeof(in.el7041);
+		return (m_type == MT_EL7047) ? sizeof(in.el7047) : sizeof(in.el7041);
 	}
 
 	inline size_t out_size() const {
-		return m_type == MT_EL7047 ? sizeof(out.el7047) : sizeof(out.el7041);
+		return (m_type == MT_EL7047) ? sizeof(out.el7047) : sizeof(out.el7041);
 	}
 
 	// Save/restore helpers
@@ -171,49 +173,59 @@ public:
 			in.el7041.stm_err : in.el7047.stm_err;
 	}
 
+	// Assignment and UNUSED() lines are a workaround for an 11 year old clang bug: https://github.com/llvm/llvm-project/issues/14181
 	inline void set_stm_reset(bool reset) {
-		m_type == MT_EL7041 ?
+		uint32_t i = m_type == MT_EL7041 ?
 			out.el7041.stm_reset = reset : out.el7047.stm_reset = reset;
+		UNUSED(i);
 	}
 
 	inline void set_pos_execute(bool exec) {
-		m_type == MT_EL7041 ?
+		uint32_t i = m_type == MT_EL7041 ?
 			out.el7041.pos_execute = exec : out.el7047.pos_execute = exec;
+		UNUSED(i);
 	}
 
 	inline void set_pos_emergency_stop(bool stop) {
-		m_type == MT_EL7041 ?
+		uint32_t i = m_type == MT_EL7041 ?
 			out.el7041.pos_emergency_stp = stop : out.el7047.pos_emergency_stp = stop;
+		UNUSED(i);
 	}
 
 	inline void set_stm_enable(bool en) {
-		m_type == MT_EL7041 ?
+		uint32_t i = m_type == MT_EL7041 ?
 			out.el7041.stm_enable = en : out.el7047.stm_enable = en;
+		UNUSED(i);
 	}
 
 	inline void set_pos_start_type(uint32_t type) {
-		m_type == MT_EL7041 ?
+		uint32_t i = m_type == MT_EL7041 ?
 			out.el7041.pos_start_type = type : out.el7047.pos_start_type;
+		UNUSED(i);
 	}
 
 	inline void set_pos_tgt_pos(uint32_t pos) {
-		m_type == MT_EL7041 ?
+		uint32_t i = m_type == MT_EL7041 ?
 			out.el7041.pos_tgt_pos = pos : out.el7047.pos_tgt_pos = pos;
+		UNUSED(i);
 	}
 
 	inline void set_pos_accel(uint32_t accel) {
-		m_type == MT_EL7041 ?
+		uint32_t i = m_type == MT_EL7041 ?
 			out.el7041.pos_accel = accel : out.el7047.pos_accel = accel;
+		UNUSED(i);
 	}
 
 	inline void set_pos_velocity(uint32_t velo) {
-		m_type == MT_EL7041 ?
+		uint32_t i = m_type == MT_EL7041 ?
 			out.el7041.pos_velocity = velo : out.el7047.pos_velocity = velo;
+		UNUSED(i);
 	}
 
 	inline void set_pos_decel(uint32_t decel) {
-		m_type == MT_EL7041 ?
+		uint32_t i = m_type == MT_EL7041 ?
 			out.el7041.pos_decel = decel : out.el7047.pos_decel = decel;
+		UNUSED(i);
 	}
 
 	inline uint32_t cntr_val() const {
@@ -278,13 +290,15 @@ public:
 	}
 
 	inline void set_enc_set_counter(bool set) {
-		m_type == MT_EL7041 ?
+		uint32_t i = m_type == MT_EL7041 ?
 			out.el7041.enc_set_counter = set : out.el7047.enc_set_counter = set;
+		UNUSED(i);
 	}
 
 	inline void set_enc_set_counter_val(uint32_t val) {
-		m_type == MT_EL7041 ?
+		uint32_t i = m_type == MT_EL7041 ?
 			out.el7041.enc_set_counter_val = val : out.el7047.enc_set_counter_val = val;
+		UNUSED(i);
 	}
 
 	inline uint32_t pos_accel() const {

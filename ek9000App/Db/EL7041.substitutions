@@ -1,0 +1,10 @@
+
+file EL7041.template
+{       pattern
+        {
+                TERMINAL,
+
+        }
+        {
+        }
+}
