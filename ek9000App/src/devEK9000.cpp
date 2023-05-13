@@ -46,6 +46,7 @@
 
 #include "devEK9000.h"
 #include "terminal_types.g.h"
+#include "devEL7XXX.h"
 
 #define EK9000_SLAVE_ID 0
 
@@ -1250,6 +1251,8 @@ static long ek9000_init(int after) {
 		}
 		epicsPrintf("Initialization Complete.\n");
 		Utl_InitThread();
+		
+		el70x7Controller::initControllers();
 	}
 	return 0;
 }

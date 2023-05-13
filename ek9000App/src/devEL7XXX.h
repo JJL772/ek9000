@@ -120,9 +120,18 @@ public:
 
 	/* Unlocks the driver */
 	void unlock();
+	
+	/* Init the axis */
+	bool init();
 
 public:
-	asynStatus UpdatePDO(bool locked = false);
+	enum {
+		PDO_IN = 0x1,
+		PDO_OUT = 0x2
+	};
+
+	asynStatus UpdatePDO(bool locked = false, int type = PDO_IN | PDO_OUT);
+	
 	asynStatus Execute(bool locked = false); /* Execute a move */
 	void ResetExec();
 	void ResetIfRequired();
@@ -150,8 +159,14 @@ public:
 	el70x7Axis* getAxis(int num) OVERRIDE;
 	el70x7Axis* getAxis(asynUser* axis) OVERRIDE;
 
+	/* Init all axes owned by this controller */
+	void initAxes();
+
 	/* Report all parameters */
 	void report(FILE* fd, int lvl) OVERRIDE;
+
+	/* Called by ek9k device support once terminal addresses have been figured out */
+	static void initControllers();
 
 	friend class el70x7Axis;
 };

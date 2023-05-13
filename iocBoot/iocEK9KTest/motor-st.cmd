@@ -19,7 +19,6 @@ ek9000ConfigureTerminal("EK9K1", "t4", "EL3064", 4)
 ek9000ConfigureTerminal("EK9K1", "t5", "EL5042", 5)
 ek9000ConfigureTerminal("EK9K1", "t6", "EL2008", 6)
 ek9000ConfigureTerminal("EK9K1", "t7", "EL4004", 7)
-el70x7Configure("EK9K1","EK9K1_MOTOR_PORT","m1", 8, "EL7041")
 
 dbLoadRecords("../motor/db/motorUtil.db", "P=IOC:m1")
 
@@ -32,9 +31,12 @@ dbLoadRecords("../../db/EL3064.template", "TERMINAL=t4")
 dbLoadRecords("../../db/EL5042.template", "TERMINAL=t5")
 dbLoadRecords("../../db/EL2008.template", "TERMINAL=t6")
 dbLoadRecords("../../db/EL4004.template", "TERMINAL=t7")
+el70x7Configure("EK9K1","EK9K1_MOTOR_PORT","m1", 8, "EL7041")
 
 dbLoadTemplate("motor.substitutions")
 
 iocInit
+
+asynSetTraceMask EK9K1_MOTOR_PORT,0,ASYN_TRACE_FLOW
 
 #el70x7SetParam EK9K1_MOTOR_PORT maximal-current 100

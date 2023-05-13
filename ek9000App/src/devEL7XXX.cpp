@@ -35,12 +35,17 @@ enum {
 	EL7047_START_TYPE_RELATIVE = 0x2
 };
 
-#define MOTOR_TRACE() asynPrint(this->pasynUser_, ASYN_TRACE_FLOW, "(%s) %s:%u\n", __FILE__, __FUNCTION__, __LINE__)
-
 #define BREAK() /* asm("int3\n\t") */
 
 typedef std::vector<el70x7Controller*> ControllerListT;
 ControllerListT controllers;
+
+// Compile-time sanity checks
+STATIC_ASSERT(sizeof(S_EL7041_PositionInterface_Output) == (EL7041_OUTPUT_SIZE*2ul));
+STATIC_ASSERT(sizeof(S_EL7041_PositionInterface_Input) == (EL7041_INPUT_SIZE*2ul));
+STATIC_ASSERT(sizeof(S_EL7047_PositionInterface_Output) == (EL7047_OUTPUT_SIZE*2ul));
+STATIC_ASSERT(sizeof(S_EL7047_PositionInterface_Input) == (EL7047_INPUT_SIZE*2ul));
+
 
 /*
 ========================================================
@@ -84,6 +89,19 @@ void el70x7Controller::report(FILE* fd, int lvl) {
 	asynMotorController::report(fd, lvl);
 }
 
+void el70x7Controller::initAxes() {
+	for (int i = 0; i < numAxes_; ++i) {
+		getAxis(i)->init();
+	}
+}
+
+/* Called once the ek9k module has a mapping of all terminal addresses */
+void el70x7Controller::initControllers() {
+	for (auto& controller : controllers) {
+		controller->initAxes();
+	}
+}
+
 /*
 ========================================================
 
@@ -105,13 +123,19 @@ el70x7Axis::el70x7Axis(int type, el70x7Controller* pC, int axisnum) :
 	asynMotorAxis(pC, axisnum),
 	m_pdo(type)
 {
-	MOTOR_TRACE();
-	uint16_t spd;
-	uint16_t tmp;
+	asynPrint(this->pasynUser_, ASYN_TRACE_FLOW, "el70x7Axis::el70x7Axis: type=%d, axisnum=%d\n", type, axisnum);
 	pC_ = pC;
 	this->pcoupler = pC->pcoupler;
 	this->pcontroller = pC->pcontroller;
 	this->pdrv = pC->pcoupler->m_driver;
+
+}
+
+bool el70x7Axis::init() {
+	asynPrint(this->pasynUser_, ASYN_TRACE_FLOW, "el70x7Axis::init\n");
+
+	uint16_t spd, tmp;
+
 	this->lock();
 	/* Set previous params to random values */
 	/* Grab initial values */
@@ -185,19 +209,21 @@ el70x7Axis::el70x7Axis(int type, el70x7Controller* pC, int axisnum) :
 
 	this->UpdatePDO();
 	this->unlock();
-	return;
+	printf("Init finished\n");
+	return true;
 error:
 	asynPrint(this->pasynUser_, ASYN_TRACE_ERROR, "%s:%u Modbus IO error. Error=%u\n", __FUNCTION__, __LINE__, status);
 	this->unlock();
+	return false;
 }
 
 void el70x7Axis::lock() {
-	MOTOR_TRACE();
+	//MOTOR_TRACE();
 	this->pcoupler->Lock();
 }
 
 void el70x7Axis::unlock() {
-	MOTOR_TRACE();
+	//MOTOR_TRACE();
 	this->pcoupler->Unlock();
 }
 
@@ -210,7 +236,9 @@ asynStatus el70x7Axis::setMotorParameters(uint16_t min_start_vel, uint16_t max_c
 										  uint16_t reduced_coil_currrent, uint16_t nominal_voltage,
 										  uint16_t internal_resistance, uint16_t full_steps, uint16_t enc_inc) {
 	this->lock();
-	MOTOR_TRACE();
+	asynPrint(this->pasynUser_, ASYN_TRACE_FLOW, "el70x7Axis::setMotorParameters: min_start_vel=%d, max_coil_current=%d, reduced_coil_current=%d, nominal_voltage=%d, internal_resist=%d, full_steps=%d, enc_inc=%d\n",
+		min_start_vel, max_coil_current, reduced_coil_currrent, nominal_voltage, internal_resistance, full_steps, enc_inc);
+
 	uint16_t tid = pcontroller->m_terminalIndex;
 	int stat = pcoupler->doCoEIO(1, tid, coe::EL704X_MAXIMAL_CURRENT_INDEX, 1, &max_coil_current,
 								 coe::EL704X_MAXIMAL_CURRENT_SUBINDEX);
@@ -262,14 +290,12 @@ accel is the acceleration of the motor [steps/s^2]
 */
 asynStatus el70x7Axis::move(double pos, int rel, double min_vel, double max_vel, double accel) {
 	this->lock();
-	MOTOR_TRACE();
+	
+	asynPrint(this->pasynUser_, ASYN_TRACE_FLOW, "el70x7Axis::move: pos=%g, rel=%d, min_vel=%g, max_vel=%g, accel=%g\n", 
+		pos, rel, min_vel, max_vel, accel);
 	this->ResetIfRequired();
 
 	el70xxSavedPdo prevOut = m_pdo.save_output_pdo();
-
-	/* Set the params */
-	asynPrint(this->pasynUser_, ASYN_TRACE_FLOW, "Max vel: %f\n", max_vel);
-	asynPrint(this->pasynUser_, ASYN_TRACE_FLOW, "Min vel: %f\n", min_vel);
 
 	/* Update the velocity params */
 	m_pdo.set_pos_accel((uint32_t)round(accel));
@@ -303,7 +329,10 @@ accel is the acceleration of the motor in steps/s^2
 */
 asynStatus el70x7Axis::moveVelocity(double min_vel, double max_vel, double accel) {
 	this->lock();
-	MOTOR_TRACE();
+	
+	asynPrint(this->pasynUser_, ASYN_TRACE_FLOW, "el70x7Axis::moveVelocity: min_vel=%g, max_vel=%g, accel=%g\n",
+		min_vel, max_vel, accel);
+	
 	this->ResetIfRequired();
 
 	el70xxSavedPdo prevOut = m_pdo.save_output_pdo();
@@ -334,8 +363,10 @@ asynStatus el70x7Axis::home(double min_vel, double max_vel, double accel, int fo
 	UNUSED(min_vel);
 	UNUSED(forwards);
 
+	asynPrint(this->pasynUser_, ASYN_TRACE_FLOW, "el70x7Axis::home: min_vel=%g, max_vel=%g, accel=%g, forwards=%d\n",
+		min_vel, max_vel, accel, forwards);
+
 	this->lock();
-	MOTOR_TRACE();
 	this->ResetIfRequired();
 	asynPrint(this->pasynUser_, ASYN_TRACE_FLOW, "Motor home\n");
 	m_pdo.set_pos_accel((uint32_t)round(accel));
@@ -358,7 +389,9 @@ error:
 
 asynStatus el70x7Axis::stop(double accel) {
 	this->lock();
-	MOTOR_TRACE();
+	
+	asynPrint(this->pasynUser_, ASYN_TRACE_FLOW, "el70x7Axis::stop: accel=%g\n", accel);
+	
 	this->ResetIfRequired();
 
 	/* Update the deceleration field */
@@ -386,21 +419,13 @@ using setDoubleParam or something similar.
 --------------------------------------------------
 */
 asynStatus el70x7Axis::poll(bool* moving) {
-	static bool is_polling_thread_ready = false;
-
-	if (!is_polling_thread_ready) {
-		is_polling_thread_ready = true;
-		return asynSuccess;
-	}
-
 	if (!this->pcoupler->VerifyConnection()) {
-		asynPrint(this->pasynUser_, ASYN_TRACE_WARNING, "%s:%u Polling skipped because device is not connected.\n",
-				  __FUNCTION__, __LINE__);
+		asynPrint(this->pasynUser_, ASYN_TRACE_WARNING, "el70x7Axis::poll: Polling skipped because device is not connected.\n");
 		return asynSuccess;
 	}
 
 	this->lock();
-	MOTOR_TRACE();
+	//MOTOR_TRACE();
 	/* This will read params from the motor controller */
 	int stat = this->UpdatePDO();
 	if (stat)
@@ -412,6 +437,7 @@ asynStatus el70x7Axis::poll(bool* moving) {
 	this->setIntegerParam(pC_->motorStatusDirection_, m_pdo.stm_move_pos());
 	this->setIntegerParam(pC_->motorStatusSlip_, m_pdo.stm_stall());
 	this->setIntegerParam(pC_->motorStatusProblem_, m_pdo.stm_err());
+	this->setIntegerParam(pC_->motorStatusMoving_, m_pdo.pos_busy());
 
 	/* Check for counter overflow or underflow */
 	if (m_pdo.cntr_overflow() || m_pdo.cntr_underflow())
@@ -469,7 +495,7 @@ error:
 
 asynStatus el70x7Axis::setEncoderPosition(double pos) {
 	this->lock();
-	MOTOR_TRACE();
+	asynPrint(this->pasynUser_, ASYN_TRACE_FLOW, "el70x7Axis::setEncoderPosition: pos=%g\n", pos);
 
 	m_pdo.set_enc_set_counter_val((uint32_t)round(pos));
 	m_pdo.set_enc_set_counter(true);
@@ -491,25 +517,32 @@ asynStatus el70x7Axis::setClosedLoop(bool closed) {
 	return asynSuccess;
 }
 
-asynStatus el70x7Axis::UpdatePDO(bool locked) {
+asynStatus el70x7Axis::UpdatePDO(bool locked, int type) {
 	UNUSED(locked);
 	const char* pStep = "UPDATE_PDO";
 
 	el70xxSavedPdo prevInput = m_pdo.save_input_pdo();
 
 	/* Update input pdos */
-	asynPrint(this->pasynUser_, ASYN_TRACE_FLOW, "%s:%u Step: %s\n", __FUNCTION__, __LINE__, pStep);
-	int stat = pcoupler->m_driver->doModbusIO(0, MODBUS_READ_INPUT_REGISTERS, pcontroller->m_inputStart,
-											  (uint16_t*)m_pdo.in_pdo(), STRUCT_REGISTER_SIZE(m_pdo.in_size()));
-	if (stat)
-		goto error;
-	pStep = "PROPAGATE_PDO";
-	asynPrint(this->pasynUser_, ASYN_TRACE_FLOW, "%s:%u Step: %s\n", __FUNCTION__, __LINE__, pStep);
-	/* Propagate changes from our internal pdo */
-	stat = pcoupler->m_driver->doModbusIO(0, MODBUS_WRITE_MULTIPLE_REGISTERS, pcontroller->m_outputStart,
-										  (uint16_t*)m_pdo.out_pdo(), STRUCT_REGISTER_SIZE(m_pdo.out_size()));
-	if (stat)
-		goto error;
+	int stat = 0;
+	if (type & PDO_IN) {
+		asynPrint(this->pasynUser_, ASYN_TRACEIO_DRIVER, "%s:%u Step: %s. start=0x%X, dst=%p, numRegs=%lu\n", __FUNCTION__, __LINE__, pStep,
+			pcontroller->m_inputStart, m_pdo.in_pdo(), STRUCT_REGISTER_SIZE_VAL(m_pdo.in_size()));
+		stat = pcoupler->m_driver->doModbusIO(0, MODBUS_READ_INPUT_REGISTERS, pcontroller->m_inputStart,
+												  (uint16_t*)m_pdo.in_pdo(), STRUCT_REGISTER_SIZE_VAL(m_pdo.in_size()));
+		if (stat)
+			goto error;
+	}
+	if (type & PDO_OUT) {
+		pStep = "PROPAGATE_PDO";
+		asynPrint(this->pasynUser_, ASYN_TRACEIO_DRIVER, "%s:%u Step: %s. start=0x%X, dst=%p, numRegs=%lu\n", __FUNCTION__, __LINE__, pStep,
+			pcontroller->m_outputStart, (uint16_t*)m_pdo.out_pdo(), STRUCT_REGISTER_SIZE_VAL(m_pdo.out_size()));
+		/* Propagate changes from our internal pdo */
+		stat = pcoupler->m_driver->doModbusIO(0, MODBUS_WRITE_MULTIPLE_REGISTERS, pcontroller->m_outputStart,
+											  (uint16_t*)m_pdo.out_pdo(), STRUCT_REGISTER_SIZE_VAL(m_pdo.out_size()));
+		if (stat)
+			goto error;
+	}
 	return asynSuccess;
 error:
 	asynPrint(this->pasynUser_, ASYN_TRACE_ERROR,
@@ -528,7 +561,7 @@ Clears the execute bit and returns after a short sleep
 */
 void el70x7Axis::ResetExec() {
 	m_pdo.set_pos_execute(false);
-	UpdatePDO();
+	UpdatePDO(false, PDO_OUT);
 	epicsThreadSleep(0.05); /* 500 uS sleep */
 }
 
@@ -538,11 +571,11 @@ Executes a move by setting the execute bit and propagating changes
 asynStatus el70x7Axis::Execute(bool locked) {
 	UNUSED(locked);
 
-	MOTOR_TRACE();
-	this->ResetExec();
+	asynPrint(this->pasynUser_, ASYN_TRACE_FLOW, "%s: locked=%d\n", __PRETTY_FUNCTION__, locked);
+	//this->ResetExec();
 	m_pdo.set_pos_execute(true);
 	m_pdo.set_pos_emergency_stop(false);
-	int stat = this->UpdatePDO();
+	int stat = this->UpdatePDO(false, PDO_OUT);
 	if (stat)
 		goto error;
 	return asynSuccess;
@@ -558,6 +591,22 @@ void el70x7Axis::report(FILE* fd, int lvl) {
 		fprintf(fd, "\tterminal=%u\n", this->pcontroller->m_terminalIndex);
 	}
 	asynMotorAxis::report(fd, lvl);
+}
+
+static const STerminalInfoConst_t* findTermInfo(const char* name, int& id) {
+	if (name[0] == 'E' && name[1] == 'L') {
+		name += 2;
+	}
+	id = atoi(name);
+	
+	switch(id) {
+	case 7041:
+		return &EL7041_Info;
+	case 7047:
+		return &EL7047_Info;
+	default:
+		return NULL;
+	}
 }
 
 /*
@@ -582,13 +631,9 @@ void el7047_Configure(const iocshArgBuf* args) {
 		return;
 	}
 
-	int termType = -1;
-	if (!epicsStrCaseCmp("EL7047", type) || !epicsStrCaseCmp("7047", type))
-		termType = 7047;
-	else if (!epicsStrCaseCmp("EL7041", type) || !epicsStrCaseCmp("7041", type))
-		termType = 7041;
-
-	if (termType <= 0) {
+	int termId;
+	const auto* termInfo = findTermInfo(type, termId);
+	if (!termInfo) {
 		epicsPrintf("Invalid terminal type '%s'!\n", type);
 		return;
 	}
@@ -600,21 +645,10 @@ void el7047_Configure(const iocshArgBuf* args) {
 		return;
 	}
 	
-	const STerminalInfoConst_t* info = NULL;
-	switch(termType) {
-	case 7047:
-		info = &EL7047_Info; break;
-	case 7041:
-		info = &EL7041_Info; break;
-	default:
-		epicsPrintf("Invalid terminal type '%s'!\n", type);
-		break;
-	}
-	
 	devEK9000Terminal* term = &dev->m_terms[slaveid - 1];
-	dev->AddTerminal(rec, termType, slaveid);
-	term->m_inputSize = info->m_nInputSize;
-	term->m_outputSize = info->m_nOutputSize;
+	dev->AddTerminal(rec, termId, slaveid);
+	term->m_inputSize = termInfo->m_nInputSize;
+	term->m_outputSize = termInfo->m_nOutputSize;
 	el70x7Controller* pctl = new el70x7Controller(dev, term, port, 1);
 	epicsPrintf("Created motor port %s\n", port);
 	controllers.push_back(pctl);

@@ -63,7 +63,8 @@
 
 // This comes from a windows header
 #undef CALLBACK
-#define STRUCT_REGISTER_SIZE(x) (sizeof(x) % 2 == 0 ? sizeof(x) / 2 : sizeof(x) / 2 + 1)
+#define STRUCT_REGISTER_SIZE_VAL(x) ((x) / 2 + (x) % 2)
+#define STRUCT_REGISTER_SIZE(x) STRUCT_REGISTER_SIZE_VAL(sizeof(x))
 #define BYTES_TO_REG_SIZE(x) ((x) % 2 == 0 ? (x) / 2 : (x) / 2 + 1)
 
 #undef printf

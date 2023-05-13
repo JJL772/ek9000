@@ -1436,8 +1436,8 @@
 			"type": "AnalogOut",
 			"inputs": 0,
 			"outputs": 0,
-			"pdo_in_size": 14,
-			"pdo_out_size": 14
+			"pdo_in_size": 12,
+			"pdo_out_size": 11
 		},
 		{
 			"name": "EL7041",
