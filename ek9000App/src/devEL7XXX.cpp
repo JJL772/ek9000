@@ -423,6 +423,8 @@ asynStatus el70x7Axis::poll(bool* moving) {
 		asynPrint(this->pasynUser_, ASYN_TRACE_WARNING, "el70x7Axis::poll: Polling skipped because device is not connected.\n");
 		return asynSuccess;
 	}
+	
+	bool ismoving;
 
 	this->lock();
 	//MOTOR_TRACE();
@@ -431,13 +433,15 @@ asynStatus el70x7Axis::poll(bool* moving) {
 	if (stat)
 		goto error;
 
+	ismoving = m_pdo.stm_move_neg() || m_pdo.stm_move_pos();
+
 	/* encoderposition is double */
 	this->setDoubleParam(pC_->motorEncoderPosition_, (double)m_pdo.cntr_val());
 	this->setIntegerParam(pC_->motorStatusDone_, m_pdo.pos_in_tgt());
 	this->setIntegerParam(pC_->motorStatusDirection_, m_pdo.stm_move_pos());
 	this->setIntegerParam(pC_->motorStatusSlip_, m_pdo.stm_stall());
 	this->setIntegerParam(pC_->motorStatusProblem_, m_pdo.stm_err());
-	this->setIntegerParam(pC_->motorStatusMoving_, m_pdo.pos_busy());
+	this->setIntegerParam(pC_->motorStatusMoving_, ismoving);
 
 	/* Check for counter overflow or underflow */
 	if (m_pdo.cntr_overflow() || m_pdo.cntr_underflow())
@@ -449,7 +453,7 @@ asynStatus el70x7Axis::poll(bool* moving) {
 	if (m_pdo.stm_warn())
 		asynPrint(this->pasynUser_, ASYN_TRACE_WARNING, "%s: Stepper motor warning.\n", __FUNCTION__);
 	if (moving)
-		*moving = m_pdo.pos_busy() != 0;
+		*moving = ismoving;
 	this->unlock();
 	return asynSuccess;
 error:
@@ -712,16 +716,16 @@ struct diag_info_t {
 
 // clang-format off
 static diag_info_t diag_info[] = {
-	{"saturated", 0xA010, 0x1},
-	{"over-temp", 0xA010, 0x2},
-	{"torque-overload", 0xA010, 0x3},
-	{"under-voltage", 0xA010, 0x4},
-	{"over-voltage", 0xA010, 0x5},
-	{"short", 0xA010, 0x6},
-	{"no-control-pwr", 0xA010, 0x8},
-	{"misc-err", 0xA010, 0x9},
-	{"conf", 0xA010, 0xA},
-	{"stall", 0xA010, 0xB},
+	{"Saturated", 0xA010, 0x1},
+	{"Over temp", 0xA010, 0x2},
+	{"Torque overload", 0xA010, 0x3},
+	{"Under voltage", 0xA010, 0x4},
+	{"Over voltage", 0xA010, 0x5},
+	{"Short circuit coil A", 0xA010, 0x6},
+	{"Short circuit coil B", 0xA010, 0x7},
+	{"No control pwr", 0xA010, 0x8},
+	{"Misc. error", 0xA010, 0x9},
+	{"Configuration", 0xA010, 0xA},
 	{}
 };
 // clang-format on

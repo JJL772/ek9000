@@ -39,4 +39,4 @@ iocInit
 
 asynSetTraceMask EK9K1_MOTOR_PORT,0,ASYN_TRACE_FLOW
 
-#el70x7SetParam EK9K1_MOTOR_PORT maximal-current 100
+el70x7SetParam EK9K1_MOTOR_PORT maximal-current 100

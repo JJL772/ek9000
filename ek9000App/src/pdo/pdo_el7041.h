@@ -27,7 +27,6 @@ struct S_EL7041_PositionInterface_Output {
 	uint32_t _r1 : 12;
 	uint32_t enc_set_counter_val;
 
-
 	/* 0x1602 (2 bytes) */
 	uint32_t stm_enable : 1;
 	uint32_t stm_reset : 1;
