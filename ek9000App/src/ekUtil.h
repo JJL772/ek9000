@@ -58,6 +58,12 @@
 #define EK9K_CXX03 1
 #endif
 
+#if __cplusplus >= 201703L
+#define MAYBE_UNUSED [[maybe_unused]]
+#else
+#define MAYBE_UNUSED
+#endif
+
 #undef UNUSED
 #define UNUSED(x) (void)x
 

@@ -243,8 +243,9 @@ int devEK9000Terminal::doEK9000IO(int type, int startaddr, uint16_t* buf, int le
 		return EK_EBADTERM;
 	}
 	m_device->trace("%s doModbusIO type=%d, addr=%d, len=%d, buf=%p: ",
-		util::fmttime().c_str(), type, startaddr, (int)len, buf);
-	int status = m_device->doModbusIO(0, type, startaddr, buf, len);
+		util::fmttime().c_str(), type, startaddr, (int)len, (void*)buf);
+	int status = m_device->m_driver->doModbusIO(0, type, startaddr, buf, len);
+
 	if (status) {
 		m_device->trace("failed code=%d\n", status);
 		return (status + 0x100);
@@ -572,7 +573,7 @@ int devEK9000::doEK9000IO(int rw, uint16_t addr, uint16_t len, uint16_t* data) {
 	trace(
 		"%s doEK9000IO: %s addr=%d, len=%d, data=%p: ",
 		util::fmttime().c_str(),
-		rw ? "write" : "read", (int)addr, (int)len, data
+		rw ? "write" : "read", (int)addr, (int)len, (void*)data
 	);
 	/* write */
 	if (rw) {

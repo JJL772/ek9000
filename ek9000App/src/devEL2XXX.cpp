@@ -36,6 +36,7 @@
 //======================================================//
 
 static inline uint16_t get_nobt(boRecord* record) {
+	UNUSED(record);
 	return 1;
 }
 static inline uint16_t get_nobt(mbboDirectRecord* record) {
@@ -120,7 +121,7 @@ static long EL20XX_init(int) {
 	return 0;
 }
 
-static inline void type_specific_setup(boRecord* record, int16_t numbits){};
+static inline void type_specific_setup(boRecord*, int16_t){};
 static inline void type_specific_setup(mbboDirectRecord* record, int16_t numbits) {
 	record->nobt = numbits;
 	record->mask = (1 << numbits) - 1;
