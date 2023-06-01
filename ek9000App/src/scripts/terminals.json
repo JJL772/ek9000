@@ -1434,16 +1434,16 @@
 		{
 			"name": "EL7047",
 			"type": "AnalogOut",
-			"inputs": 0,
-			"outputs": 0,
+			"inputs": 1,
+			"outputs": 1,
 			"pdo_in_size": 12,
 			"pdo_out_size": 11
 		},
 		{
 			"name": "EL7041",
 			"type": "AnalogOut",
-			"inputs": 0,
-			"outputs": 0,
+			"inputs": 1,
+			"outputs": 1,
 			"pdo_in_size": 12,
 			"pdo_out_size": 11
 		}

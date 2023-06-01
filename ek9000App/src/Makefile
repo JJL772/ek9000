@@ -28,7 +28,7 @@ endif
 
 # Unfortunately EPICS and some of the motor record headers cause warnings (well, and one of our generated headers)
 # So just disable those couple warnings to avoid spam (and so PEDANTIC=1 actually builds with -Werror
-USR_CXXFLAGS += -Wno-deprecated-declarations -Wno-unused-variable
+USR_CXXFLAGS += -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-function -Wno-ignored-attributes
 
 # Records/Device support sources
 ek9000Support_SRCS += ekDiag.cpp

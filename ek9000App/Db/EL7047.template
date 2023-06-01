@@ -1,0 +1,7 @@
+record(ao,"$(TERMINAL):1")
+{
+	field(DTYP, "EL40XX")
+	field(LINR, "LINEAR")
+	field(EGU, "Volts")
+}
+

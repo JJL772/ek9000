@@ -30,6 +30,8 @@
 #include "ekDiag.h"
 #include "ekUtil.h"
 
+#include "terminal_types.g.h"
+
 enum {
 	EL7047_START_TYPE_ABSOLUTE = 0x1,
 	EL7047_START_TYPE_RELATIVE = 0x2
@@ -40,12 +42,11 @@ enum {
 typedef std::vector<el70x7Controller*> ControllerListT;
 ControllerListT controllers;
 
-// Compile-time sanity checks
-STATIC_ASSERT(sizeof(S_EL7041_PositionInterface_Output) == (EL7041_OUTPUT_SIZE*2ul));
-STATIC_ASSERT(sizeof(S_EL7041_PositionInterface_Input) == (EL7041_INPUT_SIZE*2ul));
-STATIC_ASSERT(sizeof(S_EL7047_PositionInterface_Output) == (EL7047_OUTPUT_SIZE*2ul));
-STATIC_ASSERT(sizeof(S_EL7047_PositionInterface_Input) == (EL7047_INPUT_SIZE*2ul));
+DEFINE_SINGLE_CHANNEL_INPUT_PDO(S_EL7047_PositionInterface_Input, EL7047);
+DEFINE_SINGLE_CHANNEL_OUTPUT_PDO(S_EL7047_PositionInterface_Output, EL7047);
 
+DEFINE_SINGLE_CHANNEL_INPUT_PDO(S_EL7041_PositionInterface_Input, EL7041);
+DEFINE_SINGLE_CHANNEL_OUTPUT_PDO(S_EL7041_PositionInterface_Output, EL7041);
 
 /*
 ========================================================
@@ -540,7 +541,7 @@ asynStatus el70x7Axis::UpdatePDO(bool locked, int type) {
 	if (type & PDO_OUT) {
 		pStep = "PROPAGATE_PDO";
 		asynPrint(this->pasynUser_, ASYN_TRACEIO_DRIVER, "%s:%u Step: %s. start=0x%X, dst=%p, numRegs=%lu\n", __FUNCTION__, __LINE__, pStep,
-			pcontroller->m_outputStart, (uint16_t*)m_pdo.out_pdo(), STRUCT_REGISTER_SIZE_VAL(m_pdo.out_size()));
+			pcontroller->m_outputStart, m_pdo.out_pdo(), STRUCT_REGISTER_SIZE_VAL(m_pdo.out_size()));
 		/* Propagate changes from our internal pdo */
 		stat = pcoupler->m_driver->doModbusIO(0, MODBUS_WRITE_MULTIPLE_REGISTERS, pcontroller->m_outputStart,
 											  (uint16_t*)m_pdo.out_pdo(), STRUCT_REGISTER_SIZE_VAL(m_pdo.out_size()));
@@ -597,7 +598,7 @@ void el70x7Axis::report(FILE* fd, int lvl) {
 	asynMotorAxis::report(fd, lvl);
 }
 
-static const STerminalInfoConst_t* findTermInfo(const char* name, int& id) {
+static terminal_t findTermInfo(const char* name, int& id) {
 	if (name[0] == 'E' && name[1] == 'L') {
 		name += 2;
 	}
@@ -605,11 +606,11 @@ static const STerminalInfoConst_t* findTermInfo(const char* name, int& id) {
 	
 	switch(id) {
 	case 7041:
-		return &EL7041_Info;
+		return EL7041_t();
 	case 7047:
-		return &EL7047_Info;
+		return EL7047_t();
 	default:
-		return NULL;
+		return {};
 	}
 }
 
@@ -636,8 +637,8 @@ void el7047_Configure(const iocshArgBuf* args) {
 	}
 
 	int termId;
-	const auto* termInfo = findTermInfo(type, termId);
-	if (!termInfo) {
+	const auto termInfo = findTermInfo(type, termId);
+	if (termInfo.id == 0) {
 		epicsPrintf("Invalid terminal type '%s'!\n", type);
 		return;
 	}
@@ -651,8 +652,8 @@ void el7047_Configure(const iocshArgBuf* args) {
 	
 	devEK9000Terminal* term = &dev->m_terms[slaveid - 1];
 	dev->AddTerminal(rec, termId, slaveid);
-	term->m_inputSize = termInfo->m_nInputSize;
-	term->m_outputSize = termInfo->m_nOutputSize;
+	term->m_inputSize = termInfo.inputSize;
+	term->m_outputSize = termInfo.outputSize;
 	el70x7Controller* pctl = new el70x7Controller(dev, term, port, 1);
 	epicsPrintf("Created motor port %s\n", port);
 	controllers.push_back(pctl);
