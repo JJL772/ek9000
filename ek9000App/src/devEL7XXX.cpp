@@ -272,7 +272,7 @@ asynStatus el70x7Axis::setMotorParameters(uint16_t min_start_vel, uint16_t max_c
 	this->unlock();
 	return asynSuccess;
 error:
-	asynPrint(this->pasynUser_, ASYN_TRACE_ERROR, "%s:%u Unable to propagate CoE params error=%u\n", __FUNCTION__,
+	asynPrint(this->pasynUser_, ASYN_TRACE_ERROR, "%s:%u Unable to propagate CoE params error=%d\n", __FUNCTION__,
 			  __LINE__, stat);
 	this->unlock();
 	return asynError;
