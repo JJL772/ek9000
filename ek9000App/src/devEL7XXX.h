@@ -40,6 +40,8 @@ For EL7041 and EL7031
 
 class el70x7Controller;
 
+struct EL70XXCoEParam_t;
+
 /*
 ========================================================
 
@@ -124,6 +126,9 @@ public:
 	/* Init the axis */
 	bool init();
 
+	bool writeCoEParam(const EL70XXCoEParam_t& param, int value);
+	bool readCoEParam(const EL70XXCoEParam_t& param, int& value);
+
 public:
 	enum {
 		PDO_IN = 0x1,
@@ -151,13 +156,10 @@ class epicsShareClass el70x7Controller : public asynMotorController {
 public:
 	devEK9000* pcoupler;
 	devEK9000Terminal* pcontroller;
-	el70x7Axis** paxis;
+	el70x7Axis* paxis;
 
 public:
 	el70x7Controller(devEK9000* dev, devEK9000Terminal* controller, const char* port, int numAxis);
-
-	el70x7Axis* getAxis(int num) OVERRIDE;
-	el70x7Axis* getAxis(asynUser* axis) OVERRIDE;
 
 	/* Init all axes owned by this controller */
 	void initAxes();
@@ -165,10 +167,15 @@ public:
 	/* Report all parameters */
 	void report(FILE* fd, int lvl) OVERRIDE;
 
+	asynStatus setIntegerParam(int index, int value) OVERRIDE;
+	asynStatus getIntegerParam(int index, int* value) OVERRIDE;
+
 	/* Called by ek9k device support once terminal addresses have been figured out */
 	static void initControllers();
 
 	friend class el70x7Axis;
+	
+	int* paramIndices_;
 };
 
 #define EL7047_VELO_MIN_INDEX 13

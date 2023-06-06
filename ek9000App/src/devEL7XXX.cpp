@@ -48,6 +48,64 @@ DEFINE_SINGLE_CHANNEL_OUTPUT_PDO(S_EL7047_PositionInterface_Output, EL7047);
 DEFINE_SINGLE_CHANNEL_INPUT_PDO(S_EL7041_PositionInterface_Input, EL7041);
 DEFINE_SINGLE_CHANNEL_OUTPUT_PDO(S_EL7041_PositionInterface_Output, EL7041);
 
+
+struct EL70XXCoEParam_t {
+	uint16_t index;
+	uint16_t subindex;
+	asynParamType type;
+	const char* name;
+	coe::EParamType coeType;
+	
+	explicit operator coe::param_t() const {
+		coe::param_t p;
+		p.index = index;
+		p.subindex = subindex;
+		p.name = name;
+		p.type = coeType;
+		p.length = -1;
+		return p;
+	}
+};
+
+static EL70XXCoEParam_t s_EL70XXParams[] =
+{
+	// Index 8010 STM Motor Settings Ch. 1
+#define P_MaxCurrentString "EL70XX_MAX_CURRENT"
+	{0x8010, 0x1, asynParamInt32, P_MaxCurrentString, coe::EParamType::UINT16},
+#define P_ReducedCurrentString "EL70XX_REDUCED_CURRENT"
+	{0x8010, 0x2, asynParamInt32, P_ReducedCurrentString, coe::EParamType::UINT16},
+#define P_NominalVoltageString "EL70XX_NOMINAL_VOLTAGE"
+	{0x8010, 0x3, asynParamInt32, P_NominalVoltageString, coe::EParamType::UINT16},
+#define P_MotorCoilResistanceString "EL70XX_COIL_RESISTANCE"
+	{0x8010, 0x4, asynParamInt32, P_MotorCoilResistanceString, coe::EParamType::UINT16},
+#define P_MotorEMFString "EL70XX_EMF"
+	{0x8010, 0x5, asynParamInt32, P_MotorEMFString, coe::EParamType::UINT16},
+#define P_MotorFullStepsString "EL70XX_MOTOR_FULL_STEPS"
+	{0x8010, 0x6, asynParamInt32, P_MotorFullStepsString, coe::EParamType::UINT16},
+#define P_EncoderIncrementsString "EL70XX_ENCODER_INCREMENTS"
+	{0x8010, 0x7, asynParamInt32, P_EncoderIncrementsString, coe::EParamType::UINT16},
+#define P_StartFrequencyString "EL70XX_START_FREQ"
+	{0x8010, 0x9, asynParamInt32, P_StartFrequencyString, coe::EParamType::UINT16},
+#define P_DriveOnDelayString "EL70XX_DRIVE_ON_DELAY"
+	{0x8010, 0x10, asynParamInt32, P_DriveOnDelayString, coe::EParamType::UINT16},
+#define P_DriveOffDelayString "EL70XX_DRIVE_OFF_DELAY"
+	{0x8010, 0x11, asynParamInt32, P_DriveOffDelayString, coe::EParamType::UINT16},
+	
+	// Index 8011 STM Controller Settings Ch. 1
+#define P_KpFactorString "EL70XX_KP_FACTOR"
+	{0x8011, 0x1, asynParamInt32, P_KpFactorString, coe::EParamType::UINT16},
+#define P_KiFactorString "EL70XX_KI_FACTOR"
+	{0x8011, 0x2, asynParamInt32, P_KiFactorString, coe::EParamType::UINT16},
+#define P_InnerWindowString "EL70XX_INNER_WINDOW"
+	{0x8011, 0x3, asynParamInt32, P_InnerWindowString, coe::EParamType::UINT16},
+#define P_OuterWindowString "EL70XX_OUTER_WINDOW"
+	{0x8011, 0x5, asynParamInt32, P_OuterWindowString, coe::EParamType::UINT16},
+#define P_KaFactorString "EL70XX_KA_FACTOR"
+	{0x8011, 0x7, asynParamInt32, P_KaFactorString, coe::EParamType::UINT16},
+#define P_KdFactorString "EL70XX_KD_FACTOR"
+	{0x8011, 0x8, asynParamInt32, P_KdFactorString, coe::EParamType::UINT16},
+};
+
 /*
 ========================================================
 
@@ -63,20 +121,20 @@ el70x7Controller::el70x7Controller(devEK9000* dev, devEK9000Terminal* controller
 	: asynMotorController(port, numAxis, 0, 0, 0, ASYN_MULTIDEVICE | ASYN_CANBLOCK, 1, 0, 0) {
 	pcoupler = dev;
 	pcontroller = controller;
-	this->paxis = (el70x7Axis**)calloc(sizeof(el70x7Axis*), numAxis);
-	for (int i = 0; i < numAxis; i++)
-		this->paxis[i] = new el70x7Axis(controller->m_terminalId, this, i);
+	
+	assert(numAxis == 1);
+	
+	// Create all CoE params
+	paramIndices_ = new int[ArraySize(s_EL70XXParams)];
+	for (int i = 0; i < ArraySize(s_EL70XXParams); ++i)
+		createParam(s_EL70XXParams[i].name, s_EL70XXParams[i].type, paramIndices_+i);
+	
+	// Create the axis
+	this->paxis = new el70x7Axis(controller->m_terminalId, this, 0);
+	
 	startPoller(0.25, 0.25, 0);
 	if (!dev->VerifyConnection())
 		asynPrint(pasynUserSelf, ASYN_TRACE_ERROR, "Unable to connect to device.\n");
-}
-
-el70x7Axis* el70x7Controller::getAxis(int num) {
-	return (el70x7Axis*)asynMotorController::getAxis(num);
-}
-
-el70x7Axis* el70x7Controller::getAxis(asynUser* usr) {
-	return (el70x7Axis*)asynMotorController::getAxis(usr);
 }
 
 void el70x7Controller::report(FILE* fd, int lvl) {
@@ -91,9 +149,7 @@ void el70x7Controller::report(FILE* fd, int lvl) {
 }
 
 void el70x7Controller::initAxes() {
-	for (int i = 0; i < numAxes_; ++i) {
-		getAxis(i)->init();
-	}
+	paxis->init();
 }
 
 /* Called once the ek9k module has a mapping of all terminal addresses */
@@ -101,6 +157,25 @@ void el70x7Controller::initControllers() {
 	for (auto& controller : controllers) {
 		controller->initAxes();
 	}
+}
+
+asynStatus el70x7Controller::setIntegerParam(int index, int value) {
+	for (int i = 0; i < ArraySize(s_EL70XXParams); ++i) {
+		if (index == paramIndices_[i]) {
+			return paxis->writeCoEParam(s_EL70XXParams[i], value) ? asynSuccess : asynError;
+		}
+	}
+	
+	return asynMotorController::setIntegerParam(index, value);
+}
+
+asynStatus el70x7Controller::getIntegerParam(int index, int* value) {
+	for (int i = 0; i < ArraySize(s_EL70XXParams); ++i) {
+		if (index == paramIndices_[i]) {
+			return paxis->readCoEParam(s_EL70XXParams[i], *value) ? asynSuccess : asynError;
+		}
+	}
+	return asynMotorController::getIntegerParam(index, value);
 }
 
 /*
@@ -129,7 +204,6 @@ el70x7Axis::el70x7Axis(int type, el70x7Controller* pC, int axisnum) :
 	this->pcoupler = pC->pcoupler;
 	this->pcontroller = pC->pcontroller;
 	this->pdrv = pC->pcoupler->m_driver;
-
 }
 
 bool el70x7Axis::init() {
@@ -598,6 +672,21 @@ void el70x7Axis::report(FILE* fd, int lvl) {
 	asynMotorAxis::report(fd, lvl);
 }
 
+
+bool el70x7Axis::writeCoEParam(const EL70XXCoEParam_t& param, int value) {
+	uint16_t v = value;
+	return EK_EOK == pcoupler->doCoEIO(1, pcontroller->m_terminalIndex, param.index, 2, &v, param.subindex, 2);
+}
+
+bool el70x7Axis::readCoEParam(const EL70XXCoEParam_t& param, int& value) {
+	uint16_t v;
+	bool bOK = EK_EOK == pcoupler->doCoEIO(0, pcontroller->m_terminalIndex, param.index, 2, &v, param.subindex, 2);
+	value = v;
+	return bOK;
+}
+
+
+
 static terminal_t findTermInfo(const char* name, int& id) {
 	if (name[0] == 'E' && name[1] == 'L') {
 		name += 2;
@@ -671,14 +760,12 @@ void el7047_Stat(const iocshArgBuf* args) {
 		return;
 	}
 	for (ControllerListT::iterator x = controllers.begin(); x != controllers.end(); ++x) {
-		for (int i = 0;; i++) {
-			el70x7Axis* axis = (*x)->getAxis(i);
-			if (!axis)
-				break;
-			epicsPrintf("%s\n", (*x)->pcontroller->m_recordName.data());
-			epicsPrintf("\tSpeed [steps/s]:      %u\n", axis->speed);
-			epicsPrintf("\tEncoder pos:          %u\n", axis->enc_pos);
-		}
+		el70x7Axis* axis = (*x)->paxis;
+		if (!axis)
+			break;
+		epicsPrintf("%s\n", (*x)->pcontroller->m_recordName.data());
+		epicsPrintf("\tSpeed [steps/s]:      %u\n", axis->speed);
+		epicsPrintf("\tEncoder pos:          %u\n", axis->enc_pos);
 	}
 }
 
@@ -800,7 +887,7 @@ void el70x7ResetMotor(const iocshArgBuf* args) {
 		el70x7Controller* x = *it;
 		if (strcmp(x->portName, port) == 0) {
 			/* For this, we need to toggle the reset bit in case it's already been reset once */
-			el70x7Axis* axis = x->getAxis(0);
+			el70x7Axis* axis = x->paxis;
 			axis->m_pdo.set_pos_execute(false);
 			axis->m_pdo.set_stm_reset(false);
 			axis->UpdatePDO();
