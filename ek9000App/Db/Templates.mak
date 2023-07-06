@@ -469,5 +469,8 @@ DB += ../../Db/EL5042.template ../../Db/EL5042.substitutions
 # EL7047 
 DB += ../../Db/EL7047.template ../../Db/EL7047.substitutions
 
+# EL6002 
+DB += ../../Db/EL6002.template ../../Db/EL6002.substitutions
+
 
 

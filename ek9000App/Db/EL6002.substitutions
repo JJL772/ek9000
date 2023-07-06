@@ -1,0 +1,10 @@
+
+file EL6002.template
+{       pattern
+        {
+                TERMINAL,
+
+        }
+        {
+        }
+}

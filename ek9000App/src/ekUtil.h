@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <bits/types/struct_timeval.h>
 #include <iocsh.h>
 
 /* Record includes */
@@ -23,6 +24,7 @@
 #include <mbboDirectRecord.h>
 #include <asynDriver.h>
 #include <compilerSpecific.h>
+#include <epicsTime.h>
 
 /* STL includes */
 #include <string>
@@ -249,6 +251,12 @@ template <> inline bool setupCommonDpvt<mbboDirectRecord>(mbboDirectRecord* prec
 }
 template <> inline bool setupCommonDpvt<aoRecord>(aoRecord* prec, TerminalDpvt_t& dpvt) {
 	return setupCommonDpvt(prec->name, prec->out.value.instio.string, dpvt);
+}
+
+inline uint64_t time_ms() {
+	epicsTimeStamp ts;
+	epicsTimeGetMonotonic(&ts);
+	return ts.secPastEpoch * 1000 + ts.nsec / 1000000;
 }
 
 } // namespace util
