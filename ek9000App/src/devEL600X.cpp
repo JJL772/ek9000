@@ -6,7 +6,7 @@
 #include "devEK9000.h"
 #include "ekUtil.h"
 #include "terminals.g.h"
-#include <cstdint>
+#include <algorithm>
 #include <sys/select.h>
 
 // Enable for write queuing optimization (avoids lock contention but adds potential latency)
@@ -51,7 +51,7 @@ protected:
 	devEK9000* m_device;
 	devEK9000Terminal* m_term;
 
-	char readBuf[1024];
+	char m_readBuf[1024]; // 1kb buffer more than enough
 };
 
 RegisterStreamBusInterface(drvEL600X);
@@ -117,7 +117,8 @@ bool drvEL600X::writeRequest(const void* output, size_t size, unsigned long writ
 	asynPrint(m_device->GetAsynUser(), ASYN_TRACEIO_DRIVER, "drvEL600X::writeRequest: output=%p, size=%zu, timeout=%lu\n",
 		output, size, writeTimeout_ms);
 
-	// Split the transmissions based on what we can transfer at once
+	// Split the transmission based on what we can transfer at once
+	// unfortunately this means we'll spend quite a bit of time doing I/O, so a higher-than-normal write timeout will be required
 	size_t numTransmissions = size / sizeof(pdo_el600x_t::buf);
 	for (size_t iTr = 0; iTr < numTransmissions; ++iTr) {
 		size_t thisSize = iTr < (numTransmissions-1) ? sizeof(pdo_el600x_t::buf) : size;
@@ -153,7 +154,49 @@ bool drvEL600X::writeRequest(const void* output, size_t size, unsigned long writ
 }
 
 bool drvEL600X::readRequest(unsigned long replyTimeout_ms, unsigned long readTimeout_ms, ssize_t expectedLength, bool async) {
-	return false;
+	uint64_t startMs = util::time_ms();
+
+	asynPrint(m_device->GetAsynUser(), ASYN_TRACEIO_DRIVER, 
+		"drvEL600X:readRequest: replyTimeout=%lu, readTimeout=%lu, expectLen=%ld, asyn=%s\n",
+		replyTimeout_ms, readTimeout_ms, expectedLength, async ? "true" : "false");
+
+	size_t bufOff = 0;
+
+	const size_t numTrans = expectedLength / sizeof(pdo_el600x_t::buf);
+	for (size_t nTi = 0; nTi < numTrans; ++nTi) {
+		const size_t thisSize = nTi < (numTrans-1) ? sizeof(pdo_el600x_t::buf) : expectedLength;
+
+		pdo_el600x_t pdo;
+
+		int status = m_device->doModbusIO(0, MODBUS_READ_INPUT_REGISTERS, m_term->m_inputStart, 
+			reinterpret_cast<uint16_t*>(&pdo), STRUCT_SIZE_TO_MODBUS_SIZE(thisSize));
+
+		asynPrint(m_device->GetAsynUser(), ASYN_TRACEIO_DRIVER, 
+			"drvEL600X:readRequest: read fragment %zu/%zu, size=%zu, status=%s\n",
+			nTi, numTrans, thisSize, devEK9000::ErrorToString(status));
+
+		if ((bufOff + pdo.out_len) > sizeof(m_readBuf)) {
+			LOG_ERROR(m_device, "buffer overflow, sizeof(m_readBuf) == %zu\n", sizeof(m_readBuf));
+			readCallback(StreamIoFault);
+			return false;
+		}
+
+		memcpy(m_readBuf + bufOff, pdo.buf, pdo.out_len);
+		bufOff += pdo.out_len;
+
+		if (status != EK_EOK) {
+			readCallback(StreamIoFault);
+			return false;
+		}
+
+		if (util::time_ms() - startMs >= readTimeout_ms) {
+			readCallback(StreamIoTimeout);
+			return false;
+		}
+	}
+
+	asynPrint(m_device->GetAsynUser(), ASYN_TRACEIO_DRIVER, "drvEL600X:readRequest: read completed\n");
+	return true;
 }
 
 bool drvEL600X::supportsAsyncRead() {
@@ -169,6 +212,18 @@ bool drvEL600X::acceptEvent(unsigned long mask, unsigned long timeout_ms) {
 }
 
 bool drvEL600X::connectRequest(unsigned long timeout_ms) {
+	uint64_t startMs = util::time_ms();
+	const uint64_t sleepDur = std::clamp<uint64_t>(timeout_ms / 100, 5, 50);
+	
+	// This is probably not necessary, but keep asking if we're connected before returning
+	while (!m_device->VerifyConnection()) {
+		epicsThreadSleep(sleepDur);
+		if (util::time_ms() - startMs >= timeout_ms) {
+			connectCallback(StreamIoTimeout);
+			return false;
+		}
+	}
+	connectCallback();
 	return true;
 }
 
