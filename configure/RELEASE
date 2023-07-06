@@ -13,6 +13,9 @@ EPICS_BASE=/path/to/epics/base/
 MODBUS=$(SUPPORT)/modbus
 ASYN=$(SUPPORT)/asyn-4-36
 
+# Streamdevice required for EL600X support. If unset, EL600X support will be disabled.
+STREAMDEVICE=$(SUPPORT)/streamdevice
+
 # Motor module only required for EL7XXX support
 MOTOR=$(SUPPORT)/motor-r7-2
 

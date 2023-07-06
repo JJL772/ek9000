@@ -27,7 +27,7 @@ USR_LDFLAGS += -fsanitize=address -static-libasan
 endif
 
 # Unfortunately EPICS and some of the motor record headers cause warnings (well, and one of our generated headers)
-# So just disable those couple warnings to avoid spam (and so PEDANTIC=1 actually builds with -Werror
+# So just disable those couple warnings to avoid spam, and so PEDANTIC=1 actually builds with -Werror
 USR_CXXFLAGS += -Wno-deprecated-declarations -Wno-unused-variable
 
 # Records/Device support sources
@@ -48,6 +48,11 @@ ifeq ($(ENABLE_MOTOR_SUPPORT),1)
 ek9000Support_SRCS += devEL7XXX.cpp
 ek9000Support_LIBS += motor
 USR_CXXFLAGS += -DEK9000_MOTOR_SUPPORT=1
+endif
+
+ifneq ($(STREAMDEVICE),)
+ek9000Support_LIBS += stream
+ek9000Support_SRCS += devEL600X.cpp
 endif
 
 include $(TOP)/configure/RULES
