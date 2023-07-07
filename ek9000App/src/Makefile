@@ -44,7 +44,7 @@ ek9000Support_LIBS += $(EPICS_BASE_IOC_LIBS)
 ek9000Support_LIBS += modbus
 ek9000Support_LIBS += asyn
 
-ifeq ($(ENABLE_MOTOR_SUPPORT),1)
+ifneq ($(MOTOR),)
 ek9000Support_SRCS += devEL7XXX.cpp
 ek9000Support_LIBS += motor
 USR_CXXFLAGS += -DEK9000_MOTOR_SUPPORT=1
