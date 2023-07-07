@@ -203,7 +203,7 @@ el70x7Axis::el70x7Axis(int type, el70x7Controller* pC, int axisnum) :
 	pC_ = pC;
 	this->pcoupler = pC->pcoupler;
 	this->pcontroller = pC->pcontroller;
-	this->pdrv = pC->pcoupler->m_driver;
+	this->pdrv = pC->pcoupler;
 }
 
 bool el70x7Axis::init() {
@@ -215,11 +215,11 @@ bool el70x7Axis::init() {
 	/* Set previous params to random values */
 	/* Grab initial values */
 	int status =
-		this->pcoupler->m_driver->doModbusIO(0, MODBUS_READ_HOLDING_REGISTERS, pcontroller->m_outputStart,
+		this->pcoupler->doModbusIO(0, MODBUS_READ_HOLDING_REGISTERS, pcontroller->m_outputStart,
 											 (uint16_t*)m_pdo.out_pdo(), BYTES_TO_REG_SIZE(pcontroller->m_outputSize));
 	if (status)
 		goto error;
-	status = this->pcoupler->m_driver->doModbusIO(0, MODBUS_READ_HOLDING_REGISTERS, pcontroller->m_inputStart,
+	status = this->pcoupler->doModbusIO(0, MODBUS_READ_HOLDING_REGISTERS, pcontroller->m_inputStart,
 												  (uint16_t*)m_pdo.in_pdo(), BYTES_TO_REG_SIZE(pcontroller->m_inputSize));
 	/* Read the configured speed */
 	spd = 0;
@@ -294,12 +294,12 @@ error:
 
 void el70x7Axis::lock() {
 	//MOTOR_TRACE();
-	this->pcoupler->Lock();
+	this->pcoupler->lock();
 }
 
 void el70x7Axis::unlock() {
 	//MOTOR_TRACE();
-	this->pcoupler->Unlock();
+	this->pcoupler->unlock();
 }
 
 void el70x7Axis::ResetIfRequired() {
@@ -607,7 +607,7 @@ asynStatus el70x7Axis::UpdatePDO(bool locked, int type) {
 	if (type & PDO_IN) {
 		asynPrint(this->pasynUser_, ASYN_TRACEIO_DRIVER, "%s:%u Step: %s. start=0x%X, dst=%p, numRegs=%lu\n", __FUNCTION__, __LINE__, pStep,
 			pcontroller->m_inputStart, m_pdo.in_pdo(), STRUCT_REGISTER_SIZE_VAL(m_pdo.in_size()));
-		stat = pcoupler->m_driver->doModbusIO(0, MODBUS_READ_INPUT_REGISTERS, pcontroller->m_inputStart,
+		stat = pcoupler->doModbusIO(0, MODBUS_READ_INPUT_REGISTERS, pcontroller->m_inputStart,
 												  (uint16_t*)m_pdo.in_pdo(), STRUCT_REGISTER_SIZE_VAL(m_pdo.in_size()));
 		if (stat)
 			goto error;
@@ -617,7 +617,7 @@ asynStatus el70x7Axis::UpdatePDO(bool locked, int type) {
 		asynPrint(this->pasynUser_, ASYN_TRACEIO_DRIVER, "%s:%u Step: %s. start=0x%X, dst=%p, numRegs=%lu\n", __FUNCTION__, __LINE__, pStep,
 			pcontroller->m_outputStart, m_pdo.out_pdo(), STRUCT_REGISTER_SIZE_VAL(m_pdo.out_size()));
 		/* Propagate changes from our internal pdo */
-		stat = pcoupler->m_driver->doModbusIO(0, MODBUS_WRITE_MULTIPLE_REGISTERS, pcontroller->m_outputStart,
+		stat = pcoupler->doModbusIO(0, MODBUS_WRITE_MULTIPLE_REGISTERS, pcontroller->m_outputStart,
 											  (uint16_t*)m_pdo.out_pdo(), STRUCT_REGISTER_SIZE_VAL(m_pdo.out_size()));
 		if (stat)
 			goto error;
@@ -675,14 +675,15 @@ void el70x7Axis::report(FILE* fd, int lvl) {
 
 bool el70x7Axis::writeCoEParam(const EL70XXCoEParam_t& param, int value) {
 	uint16_t v = value;
-	return EK_EOK == pcoupler->doCoEIO(1, pcontroller->m_terminalIndex, param.index, 2, &v, param.subindex, 2);
+	int status = pcoupler->doCoEIO(1, pcontroller->m_terminalIndex, param.index, 2, &v, param.subindex, 2);
+	return status == EK_EOK;
 }
 
 bool el70x7Axis::readCoEParam(const EL70XXCoEParam_t& param, int& value) {
 	uint16_t v;
-	bool bOK = EK_EOK == pcoupler->doCoEIO(0, pcontroller->m_terminalIndex, param.index, 2, &v, param.subindex, 2);
+	int status = pcoupler->doCoEIO(0, pcontroller->m_terminalIndex, param.index, 2, &v, param.subindex, 2);
 	value = v;
-	return bOK;
+	return status == EK_EOK;
 }
 
 
@@ -739,7 +740,7 @@ void el7047_Configure(const iocshArgBuf* args) {
 		return;
 	}
 	
-	devEK9000Terminal* term = &dev->m_terms[slaveid - 1];
+	devEK9000Terminal* term = dev->TerminalByIndex(slaveid-1);
 	dev->AddTerminal(rec, termId, slaveid);
 	term->m_inputSize = termInfo.inputSize;
 	term->m_outputSize = termInfo.outputSize;
@@ -783,13 +784,13 @@ void el70x7ReadCoE(const iocshArgBuf* args) {
 	for (ControllerListT::iterator it = controllers.begin(); it != controllers.end(); ++it) {
 		el70x7Controller* x = *it;
 		if (strcmp(port, x->portName) == 0) {
-			x->pcoupler->Lock();
+			x->pcoupler->lock();
 			uint16_t data[32];
 			x->pcoupler->doCoEIO(0, x->pcontroller->m_terminalIndex, index, len, data, subindex);
 			for (int j = 0; j < len; j++)
 				epicsPrintf("%u ", data[j]);
 			epicsPrintf("\n");
-			x->pcoupler->Unlock();
+			x->pcoupler->unlock();
 			return;
 		}
 	}
@@ -827,14 +828,14 @@ void el70x7PrintDiag(const iocshArgBuf* args) {
 	for (ControllerListT::iterator it = controllers.begin(); it != controllers.end(); ++it) {
 		el70x7Controller* x = *it;
 		if (strcmp(port, x->portName) == 0) {
-			x->pcoupler->Lock();
+			x->pcoupler->lock();
 			uint16_t data = 0;
 			int i = 0;
 			for (diag_info_t info = diag_info[0]; info.name; info = diag_info[++i]) {
 				x->pcoupler->doCoEIO(0, x->pcontroller->m_terminalIndex, info.index, 1, &data, info.subindex);
 				epicsPrintf("\t%s: %s\n", info.name, data == 0 ? "false" : "true");
 			}
-			x->pcoupler->Unlock();
+			x->pcoupler->unlock();
 		}
 	}
 }
@@ -854,7 +855,7 @@ void el70x7PrintMessages(const iocshArgBuf* args) {
 	for (ControllerListT::iterator it = controllers.begin(); it != controllers.end(); ++it) {
 		el70x7Controller* x = *it;
 		if (strcmp(x->portName, port) == 0) {
-			x->pcoupler->Lock();
+			x->pcoupler->lock();
 			uint16_t string[15];
 			x->pcoupler->doCoEIO(0, x->pcontroller->m_terminalIndex, 0x1008, 5, string, 0);
 			string[5] = 0;
@@ -873,7 +874,7 @@ void el70x7PrintMessages(const iocshArgBuf* args) {
 				printf("\n");
 				printf("---------------------------------------------\n");
 			}
-			x->pcoupler->Unlock();
+			x->pcoupler->unlock();
 		}
 	}
 }

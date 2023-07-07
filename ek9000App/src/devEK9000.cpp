@@ -80,6 +80,8 @@ void __PDOHack() {
 #ifndef EK9000_MOTOR_SUPPORT
 DEFINE_DUMMY_INPUT_PDO_CHECK(EL7047)
 DEFINE_DUMMY_OUTPUT_PDO_CHECK(EL7047)
+DEFINE_DUMMY_INPUT_PDO_CHECK(EL7041)
+DEFINE_DUMMY_OUTPUT_PDO_CHECK(EL7041)
 #endif
 
 //==========================================================//
@@ -244,7 +246,7 @@ int devEK9000Terminal::doEK9000IO(int type, int startaddr, uint16_t* buf, int le
 	}
 	m_device->trace("%s doModbusIO type=%d, addr=%d, len=%d, buf=%p: ",
 		util::fmttime().c_str(), type, startaddr, (int)len, (void*)buf);
-	int status = m_device->m_driver->doModbusIO(0, type, startaddr, buf, len);
+	int status = m_device->doModbusIO(0, type, startaddr, buf, len);
 
 	if (status) {
 		m_device->trace("failed code=%d\n", status);
