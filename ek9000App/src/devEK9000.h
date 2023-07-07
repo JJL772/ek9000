@@ -51,6 +51,7 @@
 #include <functional>
 #include <list>
 #include <vector>
+#include <queue>
 
 #include "ekUtil.h"
 #include "ekDiag.h"
@@ -105,6 +106,103 @@ enum {
 	if (devEK9000::debugEnabled) {                                                                                     \
 		epicsPrintf(__VA_ARGS__);                                                                                      \
 	}
+
+enum IORequestPriority {
+	IOR_PRIO_NORMAL = 1,	// Everyone else gets this
+	IOR_PRIO_ATOMIC = 2,	// "atomic" reads must be executed serially without interruption (these need to be done right after polling)
+};
+
+enum IORequestType {
+	IOR_RD_REGS,
+	IOR_RD_COILS,
+	IOR_WR_REGS,
+	IOR_WR_COILS
+};
+
+enum IORequestFlags {
+	IOR_FL_NONE = 0,
+	IOR_FL_NOREORDER = 0x1,	// Must be executed in order
+	IOR_FL_ATOMIC = 0x2,	// Must be executed all at once, cannot be interrupted by device polling
+	IOR_FL_NOWRITECOMBINE = 0x4, // Do not combine this write with any other requests
+};
+
+typedef bool(*AsyncIOCallback)(void*, const class AsyncIORequest&, devEK9000*);
+
+extern AsyncIOCallback defaultAsyncIOCallback;
+
+class AsyncIORequest {
+public:
+	AsyncIORequest(IORequestType type, int addr, void* buffer, int length, int flags) :
+		m_type(type),
+		m_prio(IOR_PRIO_NORMAL),
+		m_addr(addr),
+		m_buffer(buffer),
+		m_length(length),
+		m_flags(flags),
+		next(NULL),
+		m_callback(defaultAsyncIOCallback),
+		m_pvt(NULL)
+	{
+		m_prio = (flags & IOR_FL_ATOMIC) ? IOR_PRIO_ATOMIC : IOR_PRIO_NORMAL;
+	}
+
+
+	AsyncIORequest(IORequestType type, int addr, void* buffer, int length, AsyncIOCallback callback, void* pvt, int flags) :
+		m_type(type),
+		m_prio(IOR_PRIO_NORMAL),
+		m_addr(addr),
+		m_buffer(buffer),
+		m_length(length),
+		m_flags(flags),
+		next(NULL),
+		m_callback(callback),
+		m_pvt(pvt)
+	{
+		m_prio = (flags & IOR_FL_ATOMIC) ? IOR_PRIO_ATOMIC : IOR_PRIO_NORMAL;
+	}
+
+	AsyncIORequest(IORequestType type, AsyncIOCallback callback, void* pvt, int flags) :
+		m_type(type),
+		m_prio(IOR_PRIO_NORMAL),
+		m_addr(0),
+		m_buffer(NULL),
+		m_length(0),
+		m_flags(flags),
+		next(NULL),
+		m_callback(NULL),
+		m_pvt(pvt)
+	{
+		m_prio = (flags & IOR_FL_ATOMIC) ? IOR_PRIO_ATOMIC : IOR_PRIO_NORMAL;
+	}
+
+	int priority() const { return m_prio; }
+	IORequestType type() const { return m_type; }
+	void* buffer() const { return m_buffer; }
+	int addr() const { return m_addr; }
+	int length() const { return m_length; }
+	int flags() const { return m_flags; }
+
+	AsyncIOCallback callback() { return m_callback; }
+
+	inline bool operator<(const AsyncIORequest& rhs) {
+		return m_prio < rhs.m_prio;
+	}
+
+	// Set this to the next request in the series. Initialized to null, so don't touch
+	// if it's a one-off request
+	AsyncIORequest* next;
+
+private:
+	IORequestType m_type;
+	IORequestPriority m_prio;
+	int m_addr, m_length;
+	void* m_buffer;
+	int m_flags;
+	AsyncIOCallback m_callback;
+	void* m_pvt;
+
+	friend class devEK9000;
+};
 
 class devEK9000Terminal {
 public:
@@ -302,7 +400,7 @@ public:
 	/* Poll the ek9000 until data is ready/error */
 	/* Return 0 for OK, 1 for error */
 	/* Duration is the space between each request, timeout is the number of requests to timeout after */
-	inline int Poll(float duration, int timeout);
+	inline int CoEPoll(float duration, int timeout);
 
 	/* Try connect to terminal with CoE */
 	/* Returns 1 for connection, 0 for not */
@@ -315,6 +413,24 @@ public:
 	asynUser* GetAsynUser() {
 		return pasynUserSelf;
 	}
+
+	void doPoll(bool checkConn);
+
+	/*************************************************
+	 * Threaded I/O request API
+	 *************************************************/
+
+	void SubmitIORequest(const AsyncIORequest& request) {
+		m_asyncIOLock.lock();
+		m_asyncIO.push(request);
+		m_asyncIOLock.unlock();
+	}
+
+private:
+	epicsMutex m_asyncIOLock;
+	std::priority_queue<AsyncIORequest> m_asyncIO;
+
+	void ServiceIORequests(int timeBudgetMS);
 
 public:
 	/* Statics! */

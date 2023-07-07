@@ -51,7 +51,7 @@ protected:
 	devEK9000* m_device;
 	devEK9000Terminal* m_term;
 
-	char m_readBuf[1024]; // 1kb buffer more than enough
+	char m_readBuf[2048]; // 2kb buffer should be more than enough
 };
 
 RegisterStreamBusInterface(drvEL600X);
@@ -119,6 +119,10 @@ bool drvEL600X::writeRequest(const void* output, size_t size, unsigned long writ
 
 	// Split the transmission based on what we can transfer at once
 	// unfortunately this means we'll spend quite a bit of time doing I/O, so a higher-than-normal write timeout will be required
+	// Another concern is lock contention, if we're doing I/O for ~50ms and polling every ~100ms, we're going to end up with some overlap.
+	// an optimization for this could be batching write requests and servicing them after poll returns. In that case, all other output
+	// records should undergo the same fate. This would also open the door to write combining, if we have a significant number of writes
+	// queued at the same time.
 	size_t numTransmissions = size / sizeof(pdo_el600x_t::buf);
 	for (size_t iTr = 0; iTr < numTransmissions; ++iTr) {
 		size_t thisSize = iTr < (numTransmissions-1) ? sizeof(pdo_el600x_t::buf) : size;
@@ -181,6 +185,7 @@ bool drvEL600X::readRequest(unsigned long replyTimeout_ms, unsigned long readTim
 			return false;
 		}
 
+		// Copy into the staging buffer
 		memcpy(m_readBuf + bufOff, pdo.buf, pdo.out_len);
 		bufOff += pdo.out_len;
 
@@ -200,7 +205,7 @@ bool drvEL600X::readRequest(unsigned long replyTimeout_ms, unsigned long readTim
 }
 
 bool drvEL600X::supportsAsyncRead() {
-	return true; // we can use getEK9000IO
+	return false; // For now, no. Can be implemented using getEK9000IO or queued IO requests
 }
 
 bool drvEL600X::supportsEvent() {
@@ -228,6 +233,7 @@ bool drvEL600X::connectRequest(unsigned long timeout_ms) {
 }
 
 bool drvEL600X::disconnectRequest() {
+	disconnectCallback();
 	return true; // no-op, we're always connected!
 }
 

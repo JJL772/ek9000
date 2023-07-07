@@ -106,38 +106,7 @@ void PollThreadFunc(void*) {
 			DeviceLock lock(device);
 			if (!lock.valid())
 				continue;
-			if (!cnt) {
-				/* check connection every other loop */
-				bool connected = device->VerifyConnection();
-				if (!connected && device->m_connected) {
-					LOG_WARNING(device, "%s: Link status changed to DISCONNECTED\n", device->m_name.data());
-					device->m_connected = false;
-				}
-				if (connected && !device->m_connected) {
-					LOG_WARNING(device, "%s: Link status changed to CONNECTED\n", device->m_name.data());
-					device->m_connected = true;
-				}
-				/* Skip poll if we're not connected */
-				if (!device->m_connected) {
-					LOG_INFO(device, "%s: device not connected, skipping poll", device->m_name.data());
-					continue;
-				}
-				uint16_t buf = 1;
-				if (device->doModbusIO(0, MODBUS_WRITE_SINGLE_REGISTER, 0x1121, &buf, 1)) {
-					LOG_WARNING(device, "%s: FAILED TO RESET WATCHDOG!\n", device->m_name.data());
-				}
-			}
-			/* read EL1xxx/EL3xxx/EL5xxx data */
-			if (device->m_digital_cnt) {
-				device->m_digital_status =
-					device->doModbusIO(0, MODBUS_READ_DISCRETE_INPUTS, 0, device->m_digital_buf, device->m_digital_cnt);
-				scanIoRequest(device->m_digital_io);
-			}
-			if (device->m_analog_cnt) {
-				device->m_analog_status =
-					device->doModbusIO(0, MODBUS_READ_INPUT_REGISTERS, 0, device->m_analog_buf, device->m_analog_cnt);
-				scanIoRequest(device->m_analog_io);
-			}
+			device->doPoll(!cnt);
 		}
 		cnt = (cnt + 1) % 2;
 		gettimeofday(&finish, NULL);
@@ -170,6 +139,89 @@ devEK9000Terminal::devEK9000Terminal(devEK9000* device) {
 	/* Output image start */
 	m_outputStart = 0;
 }
+
+void devEK9000::doPoll(bool checkConn) {
+	if (checkConn) {
+		/* check connection every other loop */
+		bool connected = VerifyConnection();
+		if (!connected && m_connected) {
+			LOG_WARNING(this, "%s: Link status changed to DISCONNECTED\n", m_name.data());
+			m_connected = false;
+		}
+		if (connected && !m_connected) {
+			LOG_WARNING(this, "%s: Link status changed to CONNECTED\n", m_name.data());
+			m_connected = true;
+		}
+		/* Skip poll if we're not connected */
+		if (!m_connected) {
+			LOG_INFO(this, "%s: device not connected, skipping poll", m_name.data());
+			return;
+		}
+		uint16_t buf = 1;
+		if (doModbusIO(0, MODBUS_WRITE_SINGLE_REGISTER, 0x1121, &buf, 1)) {
+			LOG_WARNING(this, "%s: FAILED TO RESET WATCHDOG!\n", m_name.data());
+		}
+	}
+	/* read EL1xxx/EL3xxx/EL5xxx data */
+	if (m_digital_cnt) {
+		m_digital_status =
+			doModbusIO(0, MODBUS_READ_DISCRETE_INPUTS, 0, m_digital_buf, m_digital_cnt);
+		scanIoRequest(m_digital_io);
+	}
+	if (m_analog_cnt) {
+		m_analog_status =
+			doModbusIO(0, MODBUS_READ_INPUT_REGISTERS, 0, m_analog_buf, m_analog_cnt);
+		scanIoRequest(m_analog_io);
+	}
+
+	ServiceIORequests(pollDelay);
+}
+
+// Assumes device already locked
+void devEK9000::ServiceIORequests(int timeBudgetMS) {
+	m_asyncIOLock.lock();
+
+	while(m_asyncIO.size()) {
+		const AsyncIORequest& req = m_asyncIO.top();
+
+		assert(req.m_callback);
+		req.m_callback(req.m_pvt, req, this);
+
+		m_asyncIO.pop();
+	}
+
+	m_asyncIOLock.unlock(); // todo scoped lock pleaseeeee
+}
+
+static bool DefaultAsyncIOCallback(void* pvt, const AsyncIORequest& request, devEK9000* device) {
+
+	int status = 0;
+	switch(request.type()) {
+	case IOR_RD_COILS:
+		status = device->doModbusIO(0, MODBUS_READ_COILS, request.addr(), 
+			reinterpret_cast<uint16_t*>(request.buffer()), request.length());
+	case IOR_RD_REGS:
+		status = device->doModbusIO(0, MODBUS_READ_INPUT_REGISTERS, request.addr(), 
+			reinterpret_cast<uint16_t*>(request.buffer()), request.length());
+	case IOR_WR_COILS:
+		status = device->doModbusIO(0, MODBUS_WRITE_MULTIPLE_COILS, request.addr(), 
+			reinterpret_cast<uint16_t*>(request.buffer()), request.length());
+	case IOR_WR_REGS:
+		status = device->doModbusIO(0, MODBUS_WRITE_MULTIPLE_REGISTERS, request.addr(), 
+			reinterpret_cast<uint16_t*>(request.buffer()), request.length());
+	default:
+		assert(0);
+	}
+
+	if (status != EK_EOK) {
+		return false;
+	}
+
+	return true;
+}
+
+AsyncIOCallback defaultAsyncIOCallback = DefaultAsyncIOCallback;
+
 
 void devEK9000Terminal::Init(uint32_t termid, int termindex) {
 	int outp = 0, inp = 0;
@@ -511,7 +563,7 @@ int devEK9000::doCoEIO(int rw, uint16_t term, uint16_t index, uint16_t len, uint
 
 		memcpy(tmp_data + 6, data, len * sizeof(uint16_t));
 		this->doModbusIO(0, MODBUS_WRITE_MULTIPLE_REGISTERS, 0x1400, tmp_data, len + 7);
-		if (!this->Poll(0.005, TIMEOUT_COUNT)) {
+		if (!this->CoEPoll(0.005, TIMEOUT_COUNT)) {
 			this->doModbusIO(0, MODBUS_READ_HOLDING_REGISTERS, 0x1400, tmp_data, 6);
 			/* Write tmp data */
 			if ((tmp_data[0] & 0x400) != 0x400) {
@@ -538,7 +590,7 @@ int devEK9000::doCoEIO(int rw, uint16_t term, uint16_t index, uint16_t len, uint
 		this->doModbusIO(0, MODBUS_WRITE_MULTIPLE_REGISTERS, 0x1400, tmp_data, 9);
 
 		/* poll */
-		if (this->Poll(0.005, TIMEOUT_COUNT)) {
+		if (this->CoEPoll(0.005, TIMEOUT_COUNT)) {
 			uint16_t dat = 0;
 			this->doModbusIO(0, MODBUS_READ_HOLDING_REGISTERS, 0x1405, &dat, 1);
 			if (dat != 0) {
@@ -748,7 +800,7 @@ int devEK9000::ReadTerminalID(uint16_t termid, uint16_t& out) {
 	return EK_EOK;
 }
 
-int devEK9000::Poll(float duration, int timeout) {
+int devEK9000::CoEPoll(float duration, int timeout) {
 	uint16_t dat = 0;
 	this->doModbusIO(EK9000_SLAVE_ID, MODBUS_READ_HOLDING_REGISTERS, 0x1400, &dat, 1);
 	while ((dat | 0x200) == 0x200 && timeout > 0) {
