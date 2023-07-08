@@ -184,7 +184,7 @@ public:
 
 	AsyncIOCallback callback() { return m_callback; }
 
-	inline bool operator<(const AsyncIORequest& rhs) {
+	inline bool operator<(const AsyncIORequest& rhs) const {
 		return m_prio < rhs.m_prio;
 	}
 
