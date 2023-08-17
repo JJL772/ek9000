@@ -1,0 +1,260 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+    <title>Terminal Device Support &#8212; EPICS EK9000 R1.7.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Ccommissioning" href="commissioning.html" />
+    <link rel="prev" title="Welcome to EPICS EK9000’s documentation!" href="index.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="terminal-device-support">
+<h1>Terminal Device Support<a class="headerlink" href="#terminal-device-support" title="Permalink to this heading">¶</a></h1>
+<section id="analog-terminals">
+<h2>Analog Terminals<a class="headerlink" href="#analog-terminals" title="Permalink to this heading">¶</a></h2>
+<p>Beckhoff analog terminals usually have three different modes of presentation: signed, unsigned and MSB (most significant bit).
+This module only supports the signed and unsigned representations, MSB is unsupported and will result in
+an incorrect readback for negative values.</p>
+</section>
+<section id="thermocouple-terminals">
+<h2>Thermocouple Terminals<a class="headerlink" href="#thermocouple-terminals" title="Permalink to this heading">¶</a></h2>
+<p>Thermocouple terminals, like the EL3314, must be set to the “Standard” mapping mode, which is the default. Setting this to “Compact”
+will cause errors in the module and cause terminals to be mapped incorrectly.</p>
+<p>Terminal parameters, such as the thermocouple type, may be configured using the web interface.</p>
+</section>
+<section id="digital-terminals">
+<h2>Digital Terminals<a class="headerlink" href="#digital-terminals" title="Permalink to this heading">¶</a></h2>
+<p>Most Beckhoff digital E-Bus terminals are supported, up to 18 channels. For input terminals, <cite>mbbiDirect</cite> or the <cite>bi</cite> records
+may be used. Output terminals may use the <cite>mbboDirect</cite> or <cite>bo</cite> records. Regular <cite>mbbi</cite> or <cite>mbbo</cite> is <strong>not</strong> spported.</p>
+</section>
+<section id="encoder-terminals">
+<h2>Encoder Terminals<a class="headerlink" href="#encoder-terminals" title="Permalink to this heading">¶</a></h2>
+<p>Several EL5XXX series encoder terminals are supported, using the <cite>longin</cite> record type.</p>
+</section>
+<section id="supported-terminals">
+<h2>Supported Terminals<a class="headerlink" href="#supported-terminals" title="Permalink to this heading">¶</a></h2>
+<p>All terminals listed below are supported by this device support module. Unless explicitly stated
+otherwise, terminal variants are also suppored (i.e. all variants of the EL3314 such as EL3314-0002 are supported)</p>
+<ul class="simple">
+<li><p>EL1001</p></li>
+<li><p>EL1002</p></li>
+<li><p>EL1004</p></li>
+<li><p>EL1008</p></li>
+<li><p>EL1012</p></li>
+<li><p>EL1014</p></li>
+<li><p>EL1018</p></li>
+<li><p>EL1024</p></li>
+<li><p>EL1034</p></li>
+<li><p>EL1084</p></li>
+<li><p>EL1088</p></li>
+<li><p>EL1094</p></li>
+<li><p>EL1098</p></li>
+<li><p>EL1104</p></li>
+<li><p>EL1114</p></li>
+<li><p>EL1124</p></li>
+<li><p>EL1134</p></li>
+<li><p>EL1144</p></li>
+<li><p>EL1184</p></li>
+<li><p>EL1202</p></li>
+<li><p>EL1382</p></li>
+<li><p>EL1702</p></li>
+<li><p>EL1712</p></li>
+<li><p>EL1722</p></li>
+<li><p>EL1804</p></li>
+<li><p>EL1808</p></li>
+<li><p>EL1809</p></li>
+<li><p>EL1814</p></li>
+<li><p>EL1819</p></li>
+<li><p>EL2001</p></li>
+<li><p>EL2002</p></li>
+<li><p>EL2004</p></li>
+<li><p>EL2008</p></li>
+<li><p>EL2022</p></li>
+<li><p>EL2024</p></li>
+<li><p>EL2042</p></li>
+<li><p>EL2084</p></li>
+<li><p>EL2088</p></li>
+<li><p>EL2124</p></li>
+<li><p>EL2794</p></li>
+<li><p>EL2808</p></li>
+<li><p>EL2816</p></li>
+<li><p>EL3001</p></li>
+<li><p>EL3002</p></li>
+<li><p>EL3004</p></li>
+<li><p>EL3008</p></li>
+<li><p>EL3012</p></li>
+<li><p>EL3014</p></li>
+<li><p>EL3021</p></li>
+<li><p>EL3022</p></li>
+<li><p>EL3024</p></li>
+<li><p>EL3041</p></li>
+<li><p>EL3042</p></li>
+<li><p>EL3044</p></li>
+<li><p>EL3048</p></li>
+<li><p>EL3051</p></li>
+<li><p>EL3052</p></li>
+<li><p>EL3054</p></li>
+<li><p>EL3058</p></li>
+<li><p>EL3061</p></li>
+<li><p>EL3062</p></li>
+<li><p>EL3064</p></li>
+<li><p>EL3068</p></li>
+<li><p>EL3101</p></li>
+<li><p>EL3102</p></li>
+<li><p>EL3104</p></li>
+<li><p>EL3111</p></li>
+<li><p>EL3112</p></li>
+<li><p>EL3114</p></li>
+<li><p>EL3121</p></li>
+<li><p>EL3122</p></li>
+<li><p>EL3124</p></li>
+<li><p>EL3141</p></li>
+<li><p>EL3142</p></li>
+<li><p>EL3144</p></li>
+<li><p>EL3151</p></li>
+<li><p>EL3152</p></li>
+<li><p>EL3154</p></li>
+<li><p>EL3161</p></li>
+<li><p>EL3162</p></li>
+<li><p>EL3164</p></li>
+<li><p>EL3174</p></li>
+<li><p>EL3202</p></li>
+<li><p>EL3314</p></li>
+<li><p>EL3312</p></li>
+<li><p>EL3311</p></li>
+<li><p>EL3681</p></li>
+<li><p>EL4001</p></li>
+<li><p>EL4002</p></li>
+<li><p>EL4004</p></li>
+<li><p>EL4008</p></li>
+<li><p>EL4011</p></li>
+<li><p>EL4012</p></li>
+<li><p>EL4014</p></li>
+<li><p>EL4018</p></li>
+<li><p>EL4021</p></li>
+<li><p>EL4022</p></li>
+<li><p>EL4024</p></li>
+<li><p>EL4028</p></li>
+<li><p>EL4031</p></li>
+<li><p>EL4032</p></li>
+<li><p>EL4034</p></li>
+<li><p>EL4038</p></li>
+<li><p>EL4102</p></li>
+<li><p>EL4104</p></li>
+<li><p>EL4114</p></li>
+<li><p>EL4112</p></li>
+<li><p>EL4134</p></li>
+<li><p>EL4132</p></li>
+<li><p>EL4122</p></li>
+<li><p>EL5001</p></li>
+<li><p>EL5002</p></li>
+<li><p>EL5042</p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">EPICS EK9000</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Terminal Device Support</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analog-terminals">Analog Terminals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#thermocouple-terminals">Thermocouple Terminals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#digital-terminals">Digital Terminals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#encoder-terminals">Encoder Terminals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#supported-terminals">Supported Terminals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="commissioning.html">Ccommissioning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="iocsh.html">IOCSH Command Reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="index.html" title="previous chapter">Welcome to EPICS EK9000’s documentation!</a></li>
+      <li>Next: <a href="commissioning.html" title="next chapter">Ccommissioning</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2023, Jeremy Lorelli.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 5.0.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/supported-terminals.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
